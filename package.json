@@ -1,0 +1,80 @@
+{
+  "name": "@elizaos/yield-optimizer",
+  "description": "AI-powered DeFi yield optimization agent built on ElizaOS",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "keywords": [
+    "defi",
+    "yield-farming",
+    "portfolio-optimization",
+    "elizaos",
+    "ai-agent",
+    "cryptocurrency",
+    "liquidity-mining",
+    "risk-management"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/velikanghost/alioth_agent"
+  },
+  "author": "YieldOptimizer Team",
+  "license": "MIT",
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    }
+  },
+  "files": [
+    "dist",
+    "knowledge"
+  ],
+  "dependencies": {
+    "@elizaos/cli": "^1.0.8",
+    "@elizaos/core": "^1.0.8",
+    "@elizaos/plugin-bootstrap": "^1.0.8",
+    "@elizaos/plugin-openai": "^1.0.4",
+    "@elizaos/plugin-sql": "^1.0.8",
+    "@types/node-fetch": "^2.6.12",
+    "axios": "^1.9.0",
+    "dotenv": "^16.5.0",
+    "node-fetch": "^3.3.2",
+    "zod": "3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@vitest/coverage-v8": "2.1.5",
+    "prettier": "3.5.3",
+    "tsup": "8.4.0",
+    "vitest": "2.1.5"
+  },
+  "scripts": {
+    "start": "elizaos start",
+    "dev": "elizaos dev",
+    "build": "tsup",
+    "lint": "prettier --write ./src",
+    "test:component": "vitest run",
+    "test:e2e": "elizaos test",
+    "test": "npm run test:component && npm run test:e2e",
+    "test:coverage": "vitest run --coverage",
+    "test:watch": "vitest",
+    "format": "prettier --write ./src",
+    "format:check": "prettier --check ./src",
+    "yield:analyze": "elizaos run analyze-yield",
+    "yield:monitor": "elizaos run monitor-protocols",
+    "portfolio:optimize": "elizaos run optimize-portfolio"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "packageManager": "pnpm@10.7.1+sha512.2d92c86b7928dc8284f53494fb4201f983da65f0fb4f0d40baafa5cf628fa31dae3e5968f12466f17df7e97310e30f343a648baea1b9b350685dafafffdf5808"
+}

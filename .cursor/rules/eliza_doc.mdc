@@ -1,0 +1,409 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Alioth ElizaOS Agent Integration - Cursor Rules
+
+You are developing the **Alioth AI Agent** using ElizaOS framework to replace the built-in AI functionality in the NestJS backend. This agent will handle all AI-driven DeFi operations while maintaining seamless integration with the backend services.
+
+## 🏗️ Architecture Overview
+
+### Current State (To Be Migrated)
+- AI logic embedded in NestJS backend (`src/modules/ai-optimization/`, `src/modules/market-analysis/`, etc.)
+- Direct database access from AI services
+- Tight coupling between AI decisions and backend execution
+
+### Target State (ElizaOS Agent)
+- Standalone ElizaOS agent with DeFi-specialized capabilities
+- API-based communication with NestJS backend
+- Microservices architecture with clear separation of concerns
+- AI agent manages: decision-making, market analysis, risk assessment
+- Backend manages: execution, data persistence, blockchain interactions
+
+## 🤖 ElizaOS Agent Specifications
+
+### Core Agent Personality
+```typescript
+// Character definition for DeFi expertise
+export const aliothCharacter = {
+  name: "Alioth",
+  description: "AI-driven DeFi yield optimization specialist",
+  personality: "Professional, analytical, risk-aware DeFi expert",
+  expertise: [
+    "Cross-chain yield farming",
+    "Portfolio optimization",
+    "Risk management",
+    "Market analysis",
+    "Gas optimization"
+  ],
+  modes: ["conservative", "balanced", "aggressive", "yolo"]
+};
+```
+
+### Required ElizaOS Plugins
+- **@elizaos/plugin-web3**: Blockchain data access and validation
+- **@elizaos/plugin-node**: Backend API communication
+- **@elizaos/plugin-database**: Data persistence (if needed)
+- **Custom DeFi Plugin**: Specialized DeFi protocol knowledge
+
+### Agent Actions (Replace Backend AI Services)
+
+#### 1. Yield Optimization Action
+```typescript
+// Replaces: AIYieldOptimizationService
+export const optimizeYieldAction = {
+  name: "OPTIMIZE_YIELD",
+  description: "Generate optimal cross-token allocation strategy",
+  handler: async (runtime, message, state) => {
+    // Call backend API for market data
+    const marketData = await fetchMarketData(runtime);
+    
+    // AI-driven allocation calculation
+    const allocation = await calculateOptimalAllocation({
+      depositToken: message.content.inputToken,
+      amount: message.content.inputAmount,
+      riskTolerance: message.content.riskTolerance,
+      marketData
+    });
+    
+    // Return strategy to backend for execution
+    return {
+      strategy: allocation,
+      confidence: calculateConfidence(allocation),
+      reasoning: generateReasoning(allocation)
+    };
+  }
+};
+```
+
+#### 2. Market Analysis Action
+```typescript
+// Replaces: ChainlinkDataService analysis logic
+export const analyzeMarketAction = {
+  name: "ANALYZE_MARKET",
+  description: "Comprehensive market and yield analysis",
+  handler: async (runtime, message, state) => {
+    const analysis = await performMarketAnalysis({
+      tokens: message.content.tokens,
+      timeframe: message.content.timeframe || "24h"
+    });
+    
+    return {
+      yields: analysis.yields,
+      risks: analysis.risks,
+      correlations: analysis.correlations,
+      recommendations: generateRecommendations(analysis)
+    };
+  }
+};
+```
+
+#### 3. Risk Assessment Action
+```typescript
+// Replaces: Risk calculation logic in backend
+export const assessRiskAction = {
+  name: "ASSESS_RISK",
+  description: "Portfolio risk analysis and scoring",
+  handler: async (runtime, message, state) => {
+    const riskAnalysis = await calculatePortfolioRisk({
+      allocation: message.content.allocation,
+      marketConditions: message.content.marketData
+    });
+    
+    return {
+      riskScore: riskAnalysis.score,
+      riskFactors: riskAnalysis.factors,
+      mitigation: riskAnalysis.mitigation,
+      maxDrawdown: riskAnalysis.maxDrawdown
+    };
+  }
+};
+```
+
+#### 4. Rebalance Decision Action
+```typescript
+// Replaces: analyzeRebalanceOpportunities logic
+export const rebalanceDecisionAction = {
+  name: "DECIDE_REBALANCE",
+  description: "Determine if portfolio rebalancing is beneficial",
+  handler: async (runtime, message, state) => {
+    const decision = await analyzeRebalanceOpportunity({
+      currentPortfolio: message.content.portfolio,
+      marketConditions: await fetchMarketData(runtime)
+    });
+    
+    return {
+      shouldRebalance: decision.recommended,
+      expectedImprovement: decision.yieldImprovement,
+      newAllocation: decision.targetAllocation,
+      reasoning: decision.reasoning
+    };
+  }
+};
+```
+
+### Agent Providers (Data Sources)
+
+#### 1. Backend API Provider
+```typescript
+// Communicates with NestJS backend
+export const aliothBackendProvider = {
+  name: "alioth-backend",
+  description: "Alioth backend API integration",
+  methods: {
+    getMarketData: async (tokens: string[]) => {
+      return fetch(`${BACKEND_URL}/market-analysis/comprehensive`, {
+        method: 'POST',
+        body: JSON.stringify({ tokens }),
+        headers: { 'Content-Type': 'application/json' }
+      });
+    },
+    
+    getUserPortfolio: async (userAddress: string) => {
+      return fetch(`${BACKEND_URL}/ai-optimization/portfolio/${userAddress}`);
+    },
+    
+    submitOptimization: async (strategy: OptimizationStrategy) => {
+      return fetch(`${BACKEND_URL}/ai-optimization/submit-strategy`, {
+        method: 'POST',
+        body: JSON.stringify(strategy)
+      });
+    }
+  }
+};
+```
+
+#### 2. DeFi Protocols Provider
+```typescript
+// Direct protocol data access for validation
+export const defiProtocolsProvider = {
+  name: "defi-protocols",
+  description: "Direct DeFi protocol data access",
+  methods: {
+    getProtocolAPY: async (protocol: string, token: string) => {
+      // Direct contract calls or subgraph queries
+    },
+    
+    validateYield: async (protocol: string, expectedYield: number) => {
+      // Cross-reference with multiple sources
+    }
+  }
+};
+```
+
+## 🔌 Backend API Modifications
+
+### New API Endpoints for Agent Communication
+
+#### 1. Agent Registration
+```typescript
+// POST /api/v1/agent/register
+interface AgentRegistrationDto {
+  agentId: string;
+  capabilities: string[];
+  version: string;
+  webhookUrl?: string;
+}
+```
+
+#### 2. Market Data Feed
+```typescript
+// GET /api/v1/agent/market-data
+// Optimized endpoint for agent consumption
+interface MarketDataResponse {
+  tokens: TokenData[];
+  protocols: ProtocolData[];
+  correlations: CorrelationMatrix;
+  timestamp: string;
+  ttl: number; // Cache TTL
+}
+```
+
+#### 3. Strategy Submission
+```typescript
+// POST /api/v1/agent/submit-strategy
+interface StrategySubmissionDto {
+  agentId: string;
+  userAddress: string;
+  strategy: OptimizationStrategy;
+  confidence: number;
+  reasoning: string;
+}
+```
+
+#### 4. Execution Feedback
+```typescript
+// POST /api/v1/agent/execution-feedback
+interface ExecutionFeedbackDto {
+  strategyId: string;
+  agentId: string;
+  accuracy: number;
+  performance: PerformanceMetrics;
+  learnings: string[];
+}
+```
+
+### Backend Services to Modify
+
+#### 1. Remove AI Logic from Backend Services
+```typescript
+// REMOVE from AIYieldOptimizationService:
+- calculateOptimalAllocation()
+- generateAIReasoning()
+- calculateAIConfidence()
+- analyzeRebalanceOpportunities()
+
+// KEEP in Backend:
+- executeOptimizedDeposit()
+- executeSwaps()
+- executeProtocolDeposits()
+- updateUserPortfolio()
+- logAIDecision()
+```
+
+#### 2. Create Agent Communication Service
+```typescript
+@Injectable()
+export class AgentCommunicationService {
+  async submitToAgent(request: AgentRequest): Promise<AgentResponse>;
+  async registerAgent(agent: AgentRegistration): Promise<void>;
+  async streamMarketData(agentId: string): Promise<void>;
+  async receiveStrategy(strategy: AgentStrategy): Promise<ExecutionResult>;
+}
+```
+
+#### 3. Modified AI Optimization Controller
+```typescript
+@Controller('ai-optimization')
+export class AIOptimizationController {
+  // MODIFIED: Delegates to agent instead of internal service
+  @Post('optimize-deposit')
+  async optimizeDeposit(@Body() request: OptimizeDepositDto) {
+    // Send request to ElizaOS agent
+    const strategy = await this.agentService.requestOptimization(request);
+    return strategy;
+  }
+  
+  // NEW: Agent callback endpoint
+  @Post('agent-strategy')
+  async receiveAgentStrategy(@Body() strategy: AgentStrategyDto) {
+    return await this.optimizationService.executeStrategy(strategy);
+  }
+}
+```
+
+## 🔄 Migration Strategy
+
+### Phase 1: ElizaOS Agent Setup
+1. Create standalone ElizaOS project
+2. Implement core DeFi actions and providers
+3. Set up agent character and personality
+4. Create backend API communication layer
+
+### Phase 2: Backend API Modifications
+1. Create agent communication endpoints
+2. Extract AI logic from backend services
+3. Implement agent registration system
+4. Set up WebSocket for real-time communication
+
+### Phase 3: Integration Testing
+1. Test agent decision-making accuracy
+2. Validate API communication
+3. Performance testing with real market data
+4. End-to-end optimization flow testing
+
+### Phase 4: Production Migration
+1. Deploy agent infrastructure
+2. Gradual traffic migration
+3. Performance monitoring
+4. Rollback procedures
+
+## 🛡️ Security Considerations
+
+### Agent Authentication
+```typescript
+// JWT-based agent authentication
+interface AgentToken {
+  agentId: string;
+  capabilities: string[];
+  expiry: number;
+  signature: string;
+}
+```
+
+### Rate Limiting
+```typescript
+// Protect backend from agent spam
+@UseGuards(AgentRateLimitGuard)
+@Controller('agent')
+export class AgentController {
+  // Rate limits per agent
+}
+```
+
+### Input Validation
+```typescript
+// Validate all agent-submitted strategies
+class StrategyValidationPipe implements PipeTransform {
+  transform(value: any) {
+    // Validate strategy parameters
+    // Check for malicious inputs
+    // Verify strategy feasibility
+  }
+}
+```
+
+## 📊 Monitoring & Observability
+
+### Agent Performance Metrics
+- Decision accuracy rate
+- Response time
+- Strategy success rate
+- Error rate
+
+### Backend Integration Metrics
+- API call latency
+- Strategy execution time
+- Success/failure rates
+- Resource utilization
+
+## 🚀 Implementation Checklist
+
+### ElizaOS Agent Development
+- [ ] Set up ElizaOS project structure
+- [ ] Implement DeFi character definition
+- [ ] Create yield optimization action
+- [ ] Create market analysis action  
+- [ ] Create risk assessment action
+- [ ] Create rebalance decision action
+- [ ] Implement backend API provider
+- [ ] Implement DeFi protocols provider
+- [ ] Set up WebSocket communication
+- [ ] Add error handling and retries
+
+### Backend Modifications
+- [ ] Create agent communication service
+- [ ] Implement agent registration endpoints
+- [ ] Create optimized market data endpoints
+- [ ] Modify AI optimization controller
+- [ ] Remove AI logic from backend services
+- [ ] Add agent authentication
+- [ ] Implement rate limiting
+- [ ] Add monitoring and logging
+- [ ] Create agent management dashboard
+
+### Integration & Testing
+- [ ] Unit tests for agent actions
+- [ ] Integration tests for API communication
+- [ ] Performance testing
+- [ ] Security testing
+- [ ] End-to-end optimization flow tests
+- [ ] Load testing with multiple agents
+
+### Deployment
+- [ ] Agent infrastructure setup
+- [ ] CI/CD pipeline for agent
+- [ ] Monitoring and alerting
+- [ ] Documentation and runbooks
+- [ ] Rollback procedures
