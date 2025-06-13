@@ -7,3 +7,5 @@ env
 *.env
 .env.local
 .eliza
+summary.txt
+chr.txt

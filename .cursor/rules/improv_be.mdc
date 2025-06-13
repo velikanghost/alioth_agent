@@ -1,0 +1,156 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Alioth AI Integration - Backend Development Rules
+
+You are developing the AI Integration backend for Alioth, an AI-driven cross-chain DeFi platform using NestJS.
+
+## AI Integration Overview
+
+### Core Innovation
+Transform user experience from token-specific deposits to universal deposits with AI-driven optimization. Users deposit any ERC20 token and AI automatically finds optimal allocation across different tokens and DeFi protocols for maximum yield.
+
+### Backend Role
+The backend serves as the intelligent orchestration layer that:
+- Analyzes market conditions and yield opportunities
+- Calculates optimal cross-token allocations
+- Executes swaps through DEX aggregators
+- Manages protocol deposits and rebalancing
+- Provides real-time monitoring and performance tracking
+
+## Enhanced Architecture Guidelines
+
+### AI-Specific Project Structure
+- Extend `/src/modules/` with AI integration modules: `ai-optimization/`, `market-analysis/`, `swap-execution/`
+- Add `/src/ai/` for AI-specific services: `allocation-engine/`, `risk-assessment/`, `performance-tracking/`
+- Enhance `/src/shared/` with cross-token utilities and mathematical libraries
+- Update `/src/common/` with AI operation types and validation schemas
+
+### AI-Driven Code Patterns
+- **Intelligent Decision Making**: Implement ML-inspired algorithms for yield optimization
+- **Real-time Analysis**: Continuous market monitoring and opportunity detection
+- **Predictive Modeling**: Use historical data to predict optimal allocations
+- **Risk Management**: Implement sophisticated risk assessment for cross-token strategies
+- **Adaptive Algorithms**: Self-improving allocation strategies based on performance feedback
+
+### Enhanced Database Architecture
+- **Portfolio Tracking**: Comprehensive user portfolio with cross-token positions
+- **AI Decision Logging**: Complete audit trail of AI decisions and outcomes
+- **Market Data Caching**: High-performance caching for real-time market analysis
+- **Performance Metrics**: Detailed tracking of AI prediction accuracy
+- **Risk Profiles**: User risk tolerance and historical risk-adjusted returns
+
+### AI-Enhanced API Development
+- **Optimization Endpoints**: Real-time deposit optimization and execution
+- **Market Analysis APIs**: Comprehensive market data and yield comparison
+- **Performance Tracking**: Real-time portfolio performance and AI accuracy metrics
+- **Risk Assessment**: Dynamic risk scoring and portfolio health monitoring
+- **Rebalancing APIs**: Automated and manual rebalancing triggers
+
+### Cross-Token Authentication & Security
+- **AI Backend Authorization**: Secure wallet-based authorization for AI operations
+- **Operation Validation**: Cryptographic validation of all AI-initiated operations
+- **Price Anchoring**: Chainlink-based validation to prevent manipulation
+- **Emergency Controls**: Circuit breakers for AI operations and suspicious activity detection
+- **Audit Logging**: Comprehensive logging of all AI decisions and executions
+
+### Advanced WebSocket Integration
+- **Real-time Portfolio Updates**: Live portfolio value and performance updates
+- **Market Data Streaming**: Continuous market condition and opportunity broadcasts
+- **AI Decision Broadcasting**: Real-time AI decision explanations and rationale
+- **Rebalancing Notifications**: Instant notifications for executed rebalancings
+- **Performance Alerts**: Automated alerts for significant performance changes
+
+### Cross-Token Blockchain Integration
+- **Multi-Protocol Interaction**: Seamless integration with Aave, Compound, Yearn adapters
+- **DEX Aggregation**: Integration with 1inch, Paraswap, and other DEX aggregators  
+- **Chainlink Data Feeds**: Real-time price and yield data for decision making
+- **Transaction Batching**: Efficient gas usage through intelligent transaction batching
+- **Cross-Chain Coordination**: CCIP integration for multi-chain optimization
+
+### AI-Specific Agent Integration
+- **Yield Optimization Agent**: Continuous yield opportunity analysis and execution
+- **Risk Management Agent**: Real-time risk assessment and portfolio protection
+- **Rebalancing Agent**: Automated rebalancing based on market conditions
+- **Performance Monitoring Agent**: AI decision accuracy tracking and improvement
+- **Emergency Response Agent**: Automated response to extreme market conditions
+
+### Enhanced Performance & Quality
+- **AI Algorithm Optimization**: Efficient implementation of complex mathematical models
+- **Real-time Processing**: Low-latency processing for time-sensitive operations
+- **Predictive Caching**: Intelligent caching based on user behavior patterns
+- **Scalable Architecture**: Design for high-frequency AI operations
+- **Performance Monitoring**: Comprehensive metrics for AI decision accuracy and speed
+
+### AI Integration Environment & Configuration
+- **AI Model Configuration**: Parameters for allocation algorithms and risk models
+- **Market Data Sources**: Configuration for multiple data sources and fallbacks
+- **DEX Integration Settings**: API keys and rate limits for DEX aggregators
+- **Security Settings**: AI backend wallet management and operation limits
+- **Performance Thresholds**: Triggers for rebalancing and emergency actions
+
+## AI Service Architecture
+
+### Core AI Services
+
+#### AIYieldOptimizationService
+```typescript
+// Main AI decision-making service
+@Injectable()
+export class AIYieldOptimizationService {
+  async optimizeDeposit(request: OptimizeDepositRequest): Promise<OptimizationStrategy>;
+  async executeOptimizedDeposit(strategy: OptimizationStrategy): Promise<ExecutionResult>;
+  async analyzeRebalanceOpportunities(portfolios: Portfolio[]): Promise<RebalanceOpportunity[]>;
+}
+```
+
+#### ChainlinkDataService
+```typescript
+// Real-time market data integration
+@Injectable()
+export class ChainlinkDataService {
+  async getMarketAnalysis(tokens: string[]): Promise<MarketAnalysis>;
+  async validateSwapRates(inputToken: string, outputToken: string, amounts: bigint[]): Promise<SwapValidation>;
+  async getYieldComparison(tokens: string[], amounts: bigint[]): Promise<YieldComparison>;
+}
+```
+
+#### CrossTokenAllocationEngine
+```typescript
+// Advanced allocation optimization algorithms
+@Injectable()
+export class CrossTokenAllocationEngine {
+  async calculateOptimalAllocation(params: AllocationParams): Promise<AllocationStrategy>;
+  async assessPortfolioRisk(allocation: AllocationStrategy): Promise<RiskAssessment>;
+  async optimizeForRiskAdjustedReturns(params: OptimizationParams): Promise<OptimizedAllocation>;
+}
+```
+
+#### DEXAggregatorService
+```typescript
+// Multi-DEX swap execution and optimization
+@Injectable()
+export class DEXAggregatorService {
+  async findOptimalSwapRoute(params: SwapParams): Promise<SwapRoute>;
+  async executeSwap(route: SwapRoute): Promise<SwapResult>;
+  async validateSwapExecution(route: SwapRoute): Promise<ValidationResult>;
+}
+```
+
+### AI Integration Modules
+- **ai-optimization.module.ts**: Core AI decision making and execution
+- **market-analysis.module.ts**: Market data processing and analysis
+- **swap-execution.module.ts**: DEX integration and swap management
+- **performance-tracking.module.ts**: AI accuracy and portfolio performance
+- **risk-management.module.ts**: Risk assessment and portfolio protection
+
+### Cross-Repository Integration Points
+- **Smart Contract Events**: Listen to and process YieldOptimizer and VaultV2 events
+- **Frontend API Integration**: Provide real-time data for AI-driven user interfaces
+- **Contract Call Integration**: Execute authorized operations on smart contracts
+- **Performance Monitoring**: Generate data for frontend performance dashboards
+- **Alert Systems**: Integrate with monitoring for user notifications
+
+Remember: All AI Integration backend features must maintain highest security standards while providing sophisticated cross-token yield optimization through AI-driven decision making.
