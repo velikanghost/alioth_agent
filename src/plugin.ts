@@ -15,6 +15,7 @@ import {
 } from '@elizaos/core'
 import { z } from 'zod'
 import { defiDataService } from './services/dataService.js'
+import { createRealTimeYieldService } from './services/realTimeYieldService.js'
 
 /**
  * Configuration schema for the yield optimizer plugin
@@ -62,18 +63,18 @@ const analyzeYieldAction: Action = {
     responses: Memory[],
   ) => {
     try {
-      logger.info('Analyzing real yield opportunities from DeFiLlama')
+      logger.info('🔍 Fetching real-time yield opportunities from web search')
 
-      // Get real yield data
-      const topYields = await defiDataService.getTopYieldOpportunities(
-        8,
-        5_000_000,
-      ) // Min $5M TVL
-      const stablecoinYields = await defiDataService.getStablecoinYields()
+      // Create real-time yield service
+      const yieldService = createRealTimeYieldService(runtime)
 
-      if (topYields.length === 0) {
+      // Get current best yield opportunities using web search
+      const yields = await yieldService.getBestYieldOpportunities()
+      const stableYields = await yieldService.getStableYields()
+
+      if (yields.length === 0) {
         const responseContent: Content = {
-          text: '⚠️ **Unable to fetch current yield data**\n\nPlease check your internet connection and try again. The yield analysis requires real-time data from DeFi protocols.',
+          text: '⚠️ **Unable to fetch current yield data**\n\nWeb search services are temporarily unavailable. Using fallback data for basic yield information.',
           actions: ['ANALYZE_YIELD'],
           source: message.content.source,
         }
@@ -81,53 +82,26 @@ const analyzeYieldAction: Action = {
         return responseContent
       }
 
-      // Format yield opportunities
-      const yieldsList = topYields
-        .slice(0, 6)
-        .map((pool) => {
-          const riskLevel =
-            pool.tvlUsd > 100_000_000
-              ? 'Low'
-              : pool.tvlUsd > 50_000_000
-                ? 'Medium'
-                : 'High'
-          const tvlFormatted =
-            pool.tvlUsd > 1_000_000
-              ? `$${(pool.tvlUsd / 1_000_000).toFixed(1)}M`
-              : `$${(pool.tvlUsd / 1_000).toFixed(0)}K`
+      // Format the response using the service's built-in formatter
+      const formattedResponse = yieldService.formatYieldsForDisplay(yields)
 
-          return (
-            `**${pool.project}** (${pool.chain}): **${(pool.apy || 0).toFixed(1)}%** APY\n` +
-            `  └ ${pool.symbol} - TVL: ${tvlFormatted} - Risk: ${riskLevel}`
-          )
-        })
-        .join('\n\n')
-
-      // Format stablecoin opportunities
-      const stablesList = stablecoinYields
+      // Add stable yields section
+      const stableYieldsList = stableYields
         .slice(0, 3)
-        .map((pool) => {
-          const tvlFormatted =
-            pool.tvlUsd > 1_000_000
-              ? `$${(pool.tvlUsd / 1_000_000).toFixed(1)}M`
-              : `$${(pool.tvlUsd / 1_000).toFixed(0)}K`
-
-          return `**${pool.project}**: ${(pool.apy || 0).toFixed(1)}% APY (${pool.symbol}) - TVL: ${tvlFormatted}`
+        .map((yield_) => {
+          return `**${yield_.protocol}**: ${yield_.apy.toFixed(1)}% APY (${yield_.asset}) - Risk: ${yield_.risk}`
         })
         .join('\n')
 
       const responseContent: Content = {
         text:
-          `🔍 **Live Yield Analysis** 📊\n\n` +
-          `**🚀 Top Yield Opportunities:**\n${yieldsList}\n\n` +
-          `**🛡️ Stable Yields (Low IL Risk):**\n${stablesList}\n\n` +
-          `⚠️ **Risk Considerations:**\n` +
-          `• Higher yields = higher risks - always DYOR\n` +
-          `• Check protocol audit history and TVL trends\n` +
-          `• Consider impermanent loss for LP positions\n` +
-          `• Diversify across protocols and chains\n\n` +
-          `💡 **Strategy:** Start with stablecoin yields (5-8% APY) then gradually add exposure to higher-yield LP positions based on your risk tolerance.\n\n` +
-          `*Data from DeFiLlama • Updated in real-time*`,
+          formattedResponse +
+          `\n\n**🛡️ Stable Yields (Conservative):**\n${stableYieldsList}\n\n` +
+          `📊 **Real-time Data Sources:**\n` +
+          `• Live web search of protocol websites\n` +
+          `• Cross-referenced yield information\n` +
+          `• Updated every 10 minutes\n\n` +
+          `*Note: Always verify rates on official protocol websites before investing.*`,
         actions: ['ANALYZE_YIELD'],
         source: message.content.source,
       }
@@ -138,7 +112,7 @@ const analyzeYieldAction: Action = {
       logger.error('Error in ANALYZE_YIELD action:', error)
 
       const errorContent: Content = {
-        text: '❌ **Error fetching yield data**\n\nUnable to retrieve current yield opportunities. This might be due to API rate limits or network issues. Please try again in a few minutes.',
+        text: '❌ **Error fetching yield data**\n\nUnable to retrieve current yield opportunities via web search. This might be due to network issues or API rate limits. Please try again in a few minutes.',
         actions: ['ANALYZE_YIELD'],
         source: message.content.source,
       }
