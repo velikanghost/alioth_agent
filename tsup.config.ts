@@ -1,19 +1,35 @@
-import { defineConfig } from 'tsup';
+import { defineConfig } from 'tsup'
 
 export default defineConfig({
-  entry: ['src/index.ts', 'e2e/**/*.test.ts'],
+  entry: ['src/index.ts'],
   outDir: 'dist',
-  tsconfig: './tsconfig.build.json', // Use build-specific tsconfig
   sourcemap: true,
   clean: true,
-  format: ['esm'], // Ensure you're targeting CommonJS
-  dts: false, // Skip DTS generation to avoid external import issues // Ensure you're targeting CommonJS
+  format: ['esm'],
+  dts: true,
+  splitting: false,
+  bundle: true,
+  platform: 'node',
+  target: 'esnext',
+  minify: false,
+  treeshake: true,
   external: [
-    'dotenv', // Externalize dotenv to prevent bundling
-    'fs', // Externalize fs to use Node.js built-in module
-    'path', // Externalize other built-ins if necessary
+    // Externalize all Node.js built-ins
+    'fs',
+    'path',
     'https',
     'http',
-    'zod',
+    'util',
+    'stream',
+    'buffer',
+    'crypto',
+    'url',
+    'querystring',
+    'zlib',
+    'os',
+    // Externalize ElizaOS packages to avoid bundling issues
+    '@elizaos/core',
+    '@elizaos/plugin-sql',
+    '@elizaos/plugin-bootstrap',
   ],
-});
+})
