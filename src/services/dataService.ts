@@ -166,213 +166,281 @@ export class DeFiDataService {
   }
 
   /**
-   * Get yield farming pools data using correct DeFiLlama yields API
+   * Get yield farming pools data using DeFiLlama yields API
    */
   async getYieldPools(): Promise<PoolData[]> {
     return this.cached('yield-pools', async () => {
-      // For demo purposes, return realistic mock data that matches DeFiLlama structure
-      logger.info('Using mock data that simulates real DeFiLlama API responses')
+      try {
+        logger.info('🔍 Fetching real yield data from DeFiLlama API...')
 
-      const mockPoolsData = [
-        // High yield opportunities
-        {
-          pool: 'pendle-wsteth-26dec2024',
-          chain: 'Ethereum',
-          project: 'Pendle',
-          symbol: 'PT-wstETH-26DEC2024',
-          tvlUsd: 120000000,
-          apy: 22.5,
-          apyBase: 3.8,
-          apyReward: 18.7,
-          rewardTokens: ['PENDLE'],
-        },
-        {
-          pool: 'convex-frxeth-eth',
-          chain: 'Ethereum',
-          project: 'Convex',
-          symbol: 'frxETH-ETH',
-          tvlUsd: 85000000,
-          apy: 18.3,
-          apyBase: 4.2,
-          apyReward: 14.1,
-          rewardTokens: ['CVX', 'CRV'],
-        },
-        {
-          pool: 'gmx-v2-arbitrum-eth-usdc',
-          chain: 'Arbitrum',
-          project: 'GMX',
-          symbol: 'ETH-USDC',
-          tvlUsd: 65000000,
-          apy: 16.8,
-          apyBase: 12.1,
-          apyReward: 4.7,
-          rewardTokens: ['GMX', 'ARB'],
-        },
+        // Fetch real data from DeFiLlama yields API
+        const response = await axios.get(`${this.yields_base}/pools`)
+        const pools = response.data?.data || []
 
-        // Stablecoin yields
-        {
-          pool: 'aave-v3-usdc',
-          chain: 'Ethereum',
-          project: 'Aave',
-          symbol: 'USDC',
-          tvlUsd: 2800000000,
-          apy: 8.2,
-          apyBase: 8.2,
-          apyReward: 0,
-        },
-        {
-          pool: 'compound-v3-usdc',
-          chain: 'Ethereum',
-          project: 'Compound',
-          symbol: 'USDC',
-          tvlUsd: 1200000000,
-          apy: 7.3,
-          apyBase: 7.3,
-          apyReward: 0,
-        },
-        {
-          pool: 'curve-3pool',
-          chain: 'Ethereum',
-          project: 'Curve',
-          symbol: '3CRV',
-          tvlUsd: 1500000000,
-          apy: 12.4,
-          apyBase: 2.1,
-          apyReward: 10.3,
-          rewardTokens: ['CRV'],
-        },
-        {
-          pool: 'curve-frax-usdc',
-          chain: 'Ethereum',
-          project: 'Curve',
-          symbol: 'FRAX-USDC',
-          tvlUsd: 450000000,
-          apy: 9.7,
-          apyBase: 1.8,
-          apyReward: 7.9,
-          rewardTokens: ['CRV', 'FXS'],
-        },
+        // Filter for major protocols and reasonable TVL
+        const filteredPools = pools.filter((pool: any) => {
+          const majorProtocols = [
+            'aave',
+            'compound',
+            'curve',
+            'convex',
+            'lido',
+            'uniswap',
+            'rocket-pool',
+            'yearn',
+          ]
+          const isValidPool =
+            pool.tvlUsd > 1000000 && // Min $1M TVL
+            pool.apy > 0 &&
+            pool.apy < 500 && // Exclude unrealistic APYs
+            majorProtocols.some(
+              (protocol) =>
+                pool.project?.toLowerCase().includes(protocol) ||
+                pool.pool?.toLowerCase().includes(protocol),
+            )
+          return isValidPool
+        })
 
-        // Blue chip DeFi
-        {
-          pool: 'lido-steth',
-          chain: 'Ethereum',
-          project: 'Lido',
-          symbol: 'stETH',
-          tvlUsd: 32000000000,
-          apy: 3.8,
-          apyBase: 3.8,
-          apyReward: 0,
-        },
-        {
-          pool: 'rocketpool-reth',
-          chain: 'Ethereum',
-          project: 'Rocket Pool',
-          symbol: 'rETH',
-          tvlUsd: 8500000000,
-          apy: 3.6,
-          apyBase: 3.6,
-          apyReward: 0,
-        },
-        {
-          pool: 'yearn-usdc-vault',
-          chain: 'Ethereum',
-          project: 'Yearn',
-          symbol: 'USDC',
-          tvlUsd: 450000000,
-          apy: 11.2,
-          apyBase: 8.5,
-          apyReward: 2.7,
-          rewardTokens: ['YFI'],
-        },
+        // Transform to our interface
+        const transformedPools = filteredPools.map((pool: any) => ({
+          pool: pool.pool || `${pool.project}-${pool.symbol}`,
+          chain: pool.chain || 'Ethereum',
+          project: pool.project || 'Unknown',
+          symbol: pool.symbol || 'Unknown',
+          tvlUsd: pool.tvlUsd,
+          apy: pool.apy,
+          apyBase: pool.apyBase || 0,
+          apyReward: pool.apyReward || 0,
+          rewardTokens: pool.rewardTokens || [],
+          il7d: pool.il7d,
+          apyBase7d: pool.apyBase7d,
+          volumeUsd1d: pool.volumeUsd1d,
+          volumeUsd7d: pool.volumeUsd7d,
+          poolId: pool.pool,
+        }))
 
-        // Layer 2 opportunities
-        {
-          pool: 'aave-v3-usdc-arbitrum',
-          chain: 'Arbitrum',
-          project: 'Aave',
-          symbol: 'USDC',
-          tvlUsd: 890000000,
-          apy: 9.4,
-          apyBase: 9.4,
-          apyReward: 0,
-        },
-        {
-          pool: 'uniswap-v3-usdc-eth-arbitrum',
-          chain: 'Arbitrum',
-          project: 'Uniswap',
-          symbol: 'USDC-ETH',
-          tvlUsd: 120000000,
-          apy: 15.7,
-          apyBase: 12.3,
-          apyReward: 3.4,
-          rewardTokens: ['ARB'],
-        },
-        {
-          pool: 'velodrome-usdc-eth-optimism',
-          chain: 'Optimism',
-          project: 'Velodrome',
-          symbol: 'USDC-ETH',
-          tvlUsd: 85000000,
-          apy: 13.9,
-          apyBase: 8.2,
-          apyReward: 5.7,
-          rewardTokens: ['VELO', 'OP'],
-        },
+        // Sort by APY descending
+        const sortedPools = transformedPools.sort(
+          (a, b) => (b.apy || 0) - (a.apy || 0),
+        )
 
-        // Emerging high yield
-        {
-          pool: 'radiant-arbitrum-usdc',
-          chain: 'Arbitrum',
-          project: 'Radiant',
-          symbol: 'USDC',
-          tvlUsd: 95000000,
-          apy: 14.6,
-          apyBase: 6.8,
-          apyReward: 7.8,
-          rewardTokens: ['RDNT', 'ARB'],
-        },
-        {
-          pool: 'beefy-polygon-aave-usdc',
-          chain: 'Polygon',
-          project: 'Beefy',
-          symbol: 'USDC',
-          tvlUsd: 35000000,
-          apy: 10.8,
-          apyBase: 7.2,
-          apyReward: 3.6,
-          rewardTokens: ['BIFI', 'MATIC'],
-        },
-      ]
+        logger.info(
+          `✅ Successfully fetched ${sortedPools.length} real yield opportunities`,
+        )
+        return sortedPools.slice(0, 50) // Top 50 opportunities
+      } catch (error) {
+        logger.error('❌ Error fetching real DeFiLlama data:', error)
+        logger.info('📦 Falling back to realistic mock data...')
 
-      // Transform to match our interface
-      const transformedPools = mockPoolsData.map((pool: any) => ({
-        pool: pool.pool,
-        chain: pool.chain,
-        project: pool.project,
-        symbol: pool.symbol,
-        tvlUsd: pool.tvlUsd,
-        apy: pool.apy,
-        apyBase: pool.apyBase,
-        apyReward: pool.apyReward,
-        rewardTokens: pool.rewardTokens,
-        il7d: undefined,
-        apyBase7d: undefined,
-        volumeUsd1d: undefined,
-        volumeUsd7d: undefined,
-      }))
-
-      // Sort by APY descending
-      const sortedPools = transformedPools.sort(
-        (a, b) => (b.apy || 0) - (a.apy || 0),
-      )
-
-      logger.info(
-        `Processed ${sortedPools.length} mock pools for demonstration`,
-      )
-
-      return sortedPools
+        // Fallback to mock data if API fails
+        //return this.getMockYieldPools()
+      }
     })
+  }
+
+  /**
+   * Fallback mock data when API is unavailable
+   */
+  private getMockYieldPools(): PoolData[] {
+    logger.info('Using mock data that simulates real DeFiLlama API responses')
+
+    const mockPoolsData = [
+      // High yield opportunities
+      {
+        pool: 'pendle-wsteth-26dec2024',
+        chain: 'Ethereum',
+        project: 'Pendle',
+        symbol: 'PT-wstETH-26DEC2024',
+        tvlUsd: 120000000,
+        apy: 22.5,
+        apyBase: 3.8,
+        apyReward: 18.7,
+        rewardTokens: ['PENDLE'],
+      },
+      {
+        pool: 'convex-frxeth-eth',
+        chain: 'Ethereum',
+        project: 'Convex',
+        symbol: 'frxETH-ETH',
+        tvlUsd: 85000000,
+        apy: 18.3,
+        apyBase: 4.2,
+        apyReward: 14.1,
+        rewardTokens: ['CVX', 'CRV'],
+      },
+      {
+        pool: 'gmx-v2-arbitrum-eth-usdc',
+        chain: 'Arbitrum',
+        project: 'GMX',
+        symbol: 'ETH-USDC',
+        tvlUsd: 65000000,
+        apy: 16.8,
+        apyBase: 12.1,
+        apyReward: 4.7,
+        rewardTokens: ['GMX', 'ARB'],
+      },
+
+      // Stablecoin yields
+      {
+        pool: 'aave-v3-usdc',
+        chain: 'Ethereum',
+        project: 'Aave',
+        symbol: 'USDC',
+        tvlUsd: 2800000000,
+        apy: 8.2,
+        apyBase: 8.2,
+        apyReward: 0,
+      },
+      {
+        pool: 'compound-v3-usdc',
+        chain: 'Ethereum',
+        project: 'Compound',
+        symbol: 'USDC',
+        tvlUsd: 1200000000,
+        apy: 7.3,
+        apyBase: 7.3,
+        apyReward: 0,
+      },
+      {
+        pool: 'curve-3pool',
+        chain: 'Ethereum',
+        project: 'Curve',
+        symbol: '3CRV',
+        tvlUsd: 1500000000,
+        apy: 12.4,
+        apyBase: 2.1,
+        apyReward: 10.3,
+        rewardTokens: ['CRV'],
+      },
+      {
+        pool: 'curve-frax-usdc',
+        chain: 'Ethereum',
+        project: 'Curve',
+        symbol: 'FRAX-USDC',
+        tvlUsd: 450000000,
+        apy: 9.7,
+        apyBase: 1.8,
+        apyReward: 7.9,
+        rewardTokens: ['CRV', 'FXS'],
+      },
+
+      // Blue chip DeFi
+      {
+        pool: 'lido-steth',
+        chain: 'Ethereum',
+        project: 'Lido',
+        symbol: 'stETH',
+        tvlUsd: 32000000000,
+        apy: 3.8,
+        apyBase: 3.8,
+        apyReward: 0,
+      },
+      {
+        pool: 'rocketpool-reth',
+        chain: 'Ethereum',
+        project: 'Rocket Pool',
+        symbol: 'rETH',
+        tvlUsd: 8500000000,
+        apy: 3.6,
+        apyBase: 3.6,
+        apyReward: 0,
+      },
+      {
+        pool: 'yearn-usdc-vault',
+        chain: 'Ethereum',
+        project: 'Yearn',
+        symbol: 'USDC',
+        tvlUsd: 450000000,
+        apy: 11.2,
+        apyBase: 8.5,
+        apyReward: 2.7,
+        rewardTokens: ['YFI'],
+      },
+
+      // Layer 2 opportunities
+      {
+        pool: 'aave-v3-usdc-arbitrum',
+        chain: 'Arbitrum',
+        project: 'Aave',
+        symbol: 'USDC',
+        tvlUsd: 890000000,
+        apy: 9.4,
+        apyBase: 9.4,
+        apyReward: 0,
+      },
+      {
+        pool: 'uniswap-v3-usdc-eth-arbitrum',
+        chain: 'Arbitrum',
+        project: 'Uniswap',
+        symbol: 'USDC-ETH',
+        tvlUsd: 120000000,
+        apy: 15.7,
+        apyBase: 12.3,
+        apyReward: 3.4,
+        rewardTokens: ['ARB'],
+      },
+      {
+        pool: 'velodrome-usdc-eth-optimism',
+        chain: 'Optimism',
+        project: 'Velodrome',
+        symbol: 'USDC-ETH',
+        tvlUsd: 85000000,
+        apy: 13.9,
+        apyBase: 8.2,
+        apyReward: 5.7,
+        rewardTokens: ['VELO', 'OP'],
+      },
+
+      // Emerging high yield
+      {
+        pool: 'radiant-arbitrum-usdc',
+        chain: 'Arbitrum',
+        project: 'Radiant',
+        symbol: 'USDC',
+        tvlUsd: 95000000,
+        apy: 14.6,
+        apyBase: 6.8,
+        apyReward: 7.8,
+        rewardTokens: ['RDNT', 'ARB'],
+      },
+      {
+        pool: 'beefy-polygon-aave-usdc',
+        chain: 'Polygon',
+        project: 'Beefy',
+        symbol: 'USDC',
+        tvlUsd: 35000000,
+        apy: 10.8,
+        apyBase: 7.2,
+        apyReward: 3.6,
+        rewardTokens: ['BIFI', 'MATIC'],
+      },
+    ]
+
+    // Transform to match our interface
+    const transformedPools = mockPoolsData.map((pool: any) => ({
+      pool: pool.pool,
+      chain: pool.chain,
+      project: pool.project,
+      symbol: pool.symbol,
+      tvlUsd: pool.tvlUsd,
+      apy: pool.apy,
+      apyBase: pool.apyBase,
+      apyReward: pool.apyReward,
+      rewardTokens: pool.rewardTokens,
+      il7d: undefined,
+      apyBase7d: undefined,
+      volumeUsd1d: undefined,
+      volumeUsd7d: undefined,
+    }))
+
+    // Sort by APY descending
+    const sortedPools = transformedPools.sort(
+      (a, b) => (b.apy || 0) - (a.apy || 0),
+    )
+
+    logger.info(`Processed ${sortedPools.length} mock pools for demonstration`)
+
+    return sortedPools
   }
 
   /**

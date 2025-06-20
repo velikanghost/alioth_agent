@@ -5,7 +5,6 @@ import {
   type Project,
   type ProjectAgent,
 } from '@elizaos/core'
-import starterPlugin from './prev.ts'
 import yieldOptimizerPlugin from './plugin.ts'
 
 /**
