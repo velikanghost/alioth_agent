@@ -5,19 +5,11 @@ import { z } from 'zod'
 // Import configuration
 import { configSchema, defaultConfig } from './config/schema.js'
 
-// Import actions
-import {
-  analyzeYieldAction,
-  riskAssessmentAction,
-  optimizePortfolioAction,
-  calculateILAction,
-  historicalAnalysisAction,
-} from './actions/index.js'
-
 // Import providers
 import {
   investmentAllocationProvider,
   protocolMonitorProvider,
+  defiAnalysisProvider,
 } from './providers/index.js'
 
 // Import routes
@@ -27,17 +19,17 @@ import { routes } from './routes/index.js'
 import { YieldOptimizationService } from './services/index.js'
 
 /**
- * Production-ready DeFi yield optimization plugin with organized structure
+ * Production-ready DeFi yield optimization plugin with unified response handling
  */
 const plugin: Plugin = {
   name: 'yield_optimizer',
   description:
-    'Production-ready DeFi yield optimization with real-time data integration',
+    'Production-ready DeFi yield optimization with unified response handling to prevent duplicates',
   priority: 2000,
   config: defaultConfig,
 
   async init(config: Record<string, string>) {
-    logger.info('*** Initializing Production Yield Optimizer Plugin ***')
+    logger.info('*** Initializing Unified Yield Optimizer Plugin ***')
     try {
       const validatedConfig = await configSchema.parseAsync(config)
 
@@ -46,7 +38,7 @@ const plugin: Plugin = {
         if (value) process.env[key] = value
       }
 
-      logger.info('Production yield optimizer plugin initialized successfully')
+      logger.info('Unified yield optimizer plugin initialized successfully')
     } catch (error) {
       if (error instanceof z.ZodError) {
         throw new Error(
@@ -62,7 +54,7 @@ const plugin: Plugin = {
   events: {
     MESSAGE_RECEIVED: [
       async (params) => {
-        logger.info('Processing yield optimization query')
+        logger.info('Processing unified yield optimization query')
       },
     ],
     YIELD_OPPORTUNITY_DETECTED: [
@@ -74,15 +66,11 @@ const plugin: Plugin = {
 
   services: [YieldOptimizationService],
 
-  actions: [
-    analyzeYieldAction,
-    riskAssessmentAction,
-    optimizePortfolioAction,
-    calculateILAction,
-    historicalAnalysisAction,
+  providers: [
+    protocolMonitorProvider,
+    investmentAllocationProvider,
+    defiAnalysisProvider,
   ],
-
-  providers: [protocolMonitorProvider, investmentAllocationProvider],
 }
 
 export default plugin
