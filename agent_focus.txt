@@ -1,0 +1,101 @@
+# Alioth AI Agent MVP Implementation Focus
+## Target: ElizaOS AI Agent for DeFi Yield Analysis and Recommendations
+
+### 🎯 **Core Responsibility**
+The AI agent provides intelligent yield optimization analysis and recommendations WITHOUT making financial decisions or executing transactions. All financial execution happens on-chain through Chainlink-validated smart contracts.
+
+## 🧠 **Required AI Actions for MVP Demo**
+
+### **1. Yield Analysis Action** (Primary MVP Feature)
+```typescript
+// Location: src/actions/yieldAnalysisAction.ts
+export const yieldAnalysisAction = {
+  name: "ANALYZE_YIELD_OPPORTUNITIES",
+  description: "Analyze DeFi protocols and recommend optimal yield strategies",
+  
+  handler: async (runtime: IAgentRuntime, message: Memory, state?: State) => {
+    const params = parseYieldAnalysisRequest(message.content);
+    
+    // 1. Fetch current market data
+    const marketData = await fetchMarketData(params.inputToken);
+    
+    // 2. Analyze protocol yields (Aave, Compound, Yearn)
+    const protocolAnalysis = await analyzeProtocolYields(marketData);
+    
+    // 3. Calculate optimal allocation based on risk tolerance
+    const allocation = calculateOptimalAllocation({
+      inputAmount: params.inputAmount,
+      riskTolerance: params.riskTolerance,
+      protocols: protocolAnalysis
+    });
+    
+    // 4. Generate human-readable reasoning
+    const reasoning = generateReasoningText(allocation, marketData);
+    
+    return {
+      allocation: [
+        { protocol: 'aave', percentage: 60, expectedAPY: 4.2, riskScore: 3 },
+        { protocol: 'compound', percentage: 40, expectedAPY: 3.8, riskScore: 2 }
+      ],
+      confidence: calculateConfidence(allocation),
+      reasoning: reasoning,
+      marketAnalysis: marketData
+    };
+  }
+};
+
+interface YieldAnalysisRequest {
+  inputToken: string;      // "0xA0b86a33E6FC17036E8b9d2C33F67Df04D6DAB07" (USDC)
+  inputAmount: string;     // "1000000000" (1000 USDC)
+  riskTolerance: 'conservative' | 'balanced' | 'aggressive';
+  userPortfolio?: Portfolio;
+}
+```
+
+## 📋 **Success Criteria for MVP Demo**
+
+### **Must Work Flawlessly:**
+1. ✅ Receive yield analysis request from backend
+2. ✅ Fetch real-time protocol data (Aave, Compound)
+3. ✅ Generate optimal allocation (e.g., 60% Aave, 40% Compound)
+4. ✅ Provide clear reasoning for recommendations
+5. ✅ Return structured data for contract execution
+6. ✅ Handle edge cases (protocol unavailability, market volatility)
+
+### **Demo Response Example:**
+```json
+{
+  "allocation": [
+    {
+      "protocol": "aave",
+      "percentage": 60,
+      "expectedAPY": 4.2,
+      "riskScore": 3,
+      "reasoning": "Highest liquidity and established track record"
+    },
+    {
+      "protocol": "compound", 
+      "percentage": 40,
+      "expectedAPY": 3.8,
+      "riskScore": 2,
+      "reasoning": "Conservative governance and consistent yields"
+    }
+  ],
+  "confidence": 85,
+  "reasoning": "Based on current market conditions, this allocation optimizes for risk-adjusted returns while maintaining good liquidity...",
+  "marketAnalysis": {
+    "volatility": 12.5,
+    "trend": "stable",
+    "riskFactors": ["moderate market volatility", "protocol concentration"]
+  }
+}
+```
+
+## 🎯 **Key Implementation Notes**
+
+1. **No Financial Execution** - Agent only provides analysis and recommendations
+2. **Real-time Data** - Always use fresh market data for accurate recommendations  
+3. **Conservative Bias** - Default to safer allocations unless user specifically requests aggressive strategies
+4. **Transparent Reasoning** - Always explain the logic behind recommendations
+5. **Error Handling** - Gracefully handle data source failures with fallback recommendations
+6. **Stateless Design** - Each analysis request is independent and self-contained

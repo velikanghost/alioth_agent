@@ -8,6 +8,20 @@ import type {
 } from '@elizaos/core'
 import { logger } from '@elizaos/core'
 import { defiDataService } from '../services/dataService.js'
+import {
+  detectRequestType,
+  extractInputToken,
+  extractInputAmount,
+  extractRiskTolerance,
+  parseMessage,
+} from '../utils/requestDetection.js'
+import { formatConversationalYieldResponse } from '../utils/responseFormatters.js'
+import type {
+  YieldAnalysisResponse,
+  ProtocolAllocation,
+  MarketData,
+  EnhancedContent,
+} from '../types/interfaces.js'
 
 /**
  * Helper function to format general yield response
@@ -30,13 +44,153 @@ const formatGeneralYieldResponse = (yields: any[]): string => {
 }
 
 /**
- * Yield Analysis Action - Now using real DeFi data
+ * Core yield analysis logic - shared by both conversational and API modes
+ */
+const performYieldAnalysis = async (params: {
+  inputToken: string
+  inputAmount: string
+  riskTolerance: 'conservative' | 'moderate' | 'aggressive'
+  userAddress?: string
+}): Promise<YieldAnalysisResponse> => {
+  const { inputToken, inputAmount, riskTolerance } = params
+
+  // Get current market data
+  const [topYields, stableYields, protocols] = await Promise.all([
+    defiDataService.getTopYieldOpportunities(10, 1_000_000),
+    defiDataService.getStablecoinYields(),
+    defiDataService.getProtocols(),
+  ])
+
+  // Filter opportunities based on input token and risk tolerance
+  let filteredOpportunities = topYields.filter((pool) =>
+    pool.symbol?.toUpperCase().includes(inputToken.toUpperCase()),
+  )
+
+  // If no specific token matches, get general opportunities
+  if (filteredOpportunities.length === 0) {
+    filteredOpportunities =
+      riskTolerance === 'conservative'
+        ? stableYields.slice(0, 5)
+        : topYields.slice(0, 5)
+  }
+
+  // Convert to protocol allocations
+  const allocation: ProtocolAllocation[] = filteredOpportunities.map(
+    (pool, index) => ({
+      protocol: pool.project || 'Unknown',
+      percentage: index === 0 ? 60 : 40 / (filteredOpportunities.length - 1),
+      expectedAPY: pool.apy || 0,
+      riskScore: calculateRiskScore(pool, riskTolerance),
+      tvl: pool.tvlUsd || 0,
+      chain: pool.chain || 'ethereum',
+      token: pool.symbol || inputToken,
+    }),
+  )
+
+  // Calculate market data
+  const totalTvl = protocols.reduce((sum, p) => sum + (p.tvl || 0), 0)
+  const averageYield =
+    topYields.length > 0
+      ? topYields.reduce((sum, pool) => sum + (pool.apy || 0), 0) /
+        topYields.length
+      : 8
+
+  const marketData: MarketData = {
+    timestamp: new Date().toISOString(),
+    totalTvl,
+    averageYield,
+    topProtocols: protocols.slice(0, 5).map((p) => p.name || 'Unknown'),
+    marketCondition:
+      averageYield > 15 ? 'bull' : averageYield < 5 ? 'bear' : 'sideways',
+  }
+
+  // Generate reasoning based on risk tolerance and market conditions
+  const reasoning = generateReasoning(allocation, riskTolerance, marketData)
+
+  // Calculate confidence based on data quality and market conditions
+  const confidence = Math.min(
+    95,
+    Math.max(
+      70,
+      85 -
+        (riskTolerance === 'aggressive' ? 10 : 0) +
+        (allocation.length > 3 ? 5 : 0),
+    ),
+  )
+
+  return {
+    allocation,
+    confidence,
+    reasoning,
+    marketAnalysis: marketData,
+    timestamp: new Date().toISOString(),
+  }
+}
+
+/**
+ * Calculate risk score for a pool based on various factors
+ */
+const calculateRiskScore = (pool: any, riskTolerance: string): number => {
+  let riskScore = 5 // Base risk score
+
+  // Adjust based on TVL (higher TVL = lower risk)
+  if (pool.tvlUsd > 100_000_000) riskScore -= 2
+  else if (pool.tvlUsd > 10_000_000) riskScore -= 1
+  else if (pool.tvlUsd < 1_000_000) riskScore += 2
+
+  // Adjust based on known protocols
+  const lowRiskProtocols = ['Aave', 'Compound', 'Lido']
+  const highRiskProtocols = ['New protocols', 'Experimental']
+
+  if (lowRiskProtocols.includes(pool.project)) riskScore -= 1
+  if (highRiskProtocols.some((risk) => pool.project?.includes(risk)))
+    riskScore += 2
+
+  // Adjust based on APY (very high APY = higher risk)
+  if (pool.apy > 50) riskScore += 3
+  else if (pool.apy > 20) riskScore += 1
+  else if (pool.apy < 5) riskScore -= 1
+
+  return Math.max(1, Math.min(10, riskScore))
+}
+
+/**
+ * Generate reasoning for the allocation
+ */
+const generateReasoning = (
+  allocation: ProtocolAllocation[],
+  riskTolerance: string,
+  marketData: MarketData,
+): string => {
+  const avgAPY =
+    allocation.reduce((sum, alloc) => sum + alloc.expectedAPY, 0) /
+    allocation.length
+
+  let reasoning = `Based on current market conditions (${marketData.marketCondition}), `
+  reasoning += `I recommend a ${riskTolerance} approach. `
+
+  if (riskTolerance === 'conservative') {
+    reasoning += `Focus on established protocols with proven track records. `
+  } else if (riskTolerance === 'aggressive') {
+    reasoning += `Consider higher-yield opportunities while managing risk exposure. `
+  } else {
+    reasoning += `Balance risk and reward with diversified protocol exposure. `
+  }
+
+  reasoning += `The average APY of ${avgAPY.toFixed(1)}% reflects current market opportunities. `
+  reasoning += `Top allocation to ${allocation[0]?.protocol} due to strong fundamentals and yield potential.`
+
+  return reasoning
+}
+
+/**
+ * Yield Analysis Action - Enhanced with dual-mode support
  */
 export const analyzeYieldAction: Action = {
   name: 'ANALYZE_YIELD',
   similes: ['CHECK_YIELDS', 'FIND_OPPORTUNITIES', 'YIELD_SCAN', 'BEST_YIELDS'],
   description:
-    'Analyzes current yield farming opportunities using real DeFi protocol data',
+    'Dual-mode yield analysis: conversational + structured API responses',
 
   validate: async (
     runtime: IAgentRuntime,
@@ -45,46 +199,24 @@ export const analyzeYieldAction: Action = {
   ): Promise<boolean> => {
     const text = message.content.text?.toLowerCase() || ''
 
-    // More specific validation for yield/supply queries
-    const hasYieldTerms =
+    // Keep existing natural language validation for chat
+    const isConversational =
       text.includes('yield') ||
       text.includes('apy') ||
-      text.includes('farming') ||
       text.includes('opportunities') ||
-      text.includes('best rates')
+      text.includes('best') ||
+      text.includes('roi') ||
+      text.includes('return') ||
+      text.includes('interest') ||
+      text.includes('staking')
 
-    const hasProtocolTerms =
-      text.includes('aave') ||
-      text.includes('compound') ||
-      text.includes('supply') ||
-      text.includes('lend') ||
-      text.includes('protocol')
+    // Add API request detection with proper type checking
+    const isAPIRequest =
+      message.content.structured === true ||
+      (typeof message.content.inputToken === 'string' &&
+        typeof message.content.inputAmount === 'string')
 
-    const hasBestTokenQuery =
-      text.includes('best token') ||
-      text.includes('best asset') ||
-      text.includes('which token') ||
-      text.includes('what token')
-
-    const hasSupplyContext =
-      text.includes('supply') ||
-      text.includes('lend') ||
-      text.includes('deposit')
-
-    // Trigger if:
-    // 1. Has yield terms, OR
-    // 2. Has protocol terms AND supply context, OR
-    // 3. Has best token query AND supply context, OR
-    // 4. Specifically mentions Aave/protocols with supply intent
-    return (
-      hasYieldTerms ||
-      (hasProtocolTerms && hasSupplyContext) ||
-      (hasBestTokenQuery && hasSupplyContext) ||
-      (text.includes('aave') &&
-        (text.includes('best') ||
-          text.includes('supply') ||
-          text.includes('data')))
-    )
+    return isConversational || isAPIRequest
   },
 
   handler: async (
@@ -93,104 +225,77 @@ export const analyzeYieldAction: Action = {
     state: State,
     options: any,
     callback: HandlerCallback,
-    responses: Memory[],
   ) => {
     try {
+      logger.info('🔍 Processing dual-mode yield analysis request')
+
+      // Detect request type and extract parameters
+      const requestType = detectRequestType(message)
+      const inputToken = extractInputToken(message)
+      const inputAmount = extractInputAmount(message)
+      const riskTolerance = extractRiskTolerance(message)
+
       logger.info(
-        '🔍 Fetching real-time yield opportunities from DeFi protocols',
+        `Request type: ${requestType}, Token: ${inputToken}, Amount: ${inputAmount}, Risk: ${riskTolerance}`,
       )
 
-      const text = message.content.text?.toLowerCase() || ''
+      // Core analysis logic (shared by both modes)
+      const analysis = await performYieldAnalysis({
+        inputToken,
+        inputAmount,
+        riskTolerance,
+        userAddress: message.content.userAddress as string,
+      })
 
-      // Check if user specifically mentioned Aave
-      const isAaveQuery = text.includes('aave')
-      const isSupplyQuery = text.includes('supply') || text.includes('lend')
-
-      let yields: any[] = []
-      let responseText = ''
-
-      if (isAaveQuery) {
-        // Get specific Aave data
-        logger.info('🎯 Analyzing Aave supply opportunities')
-
-        try {
-          // Get Aave-specific pools from dataService
-          const aavePools = await defiDataService.getPoolsByProtocol('Aave')
-
-          if (aavePools.length > 0) {
-            // Sort by APY descending
-            const sortedAave = aavePools.sort(
-              (a, b) => (b.apy || 0) - (a.apy || 0),
-            )
-
-            responseText = `🎯 **Aave V3 Supply Analysis** 📊\n\n**🚀 Best Aave Supply Opportunities:**\n\n`
-
-            sortedAave.slice(0, 5).forEach((pool, index) => {
-              const riskLevel =
-                pool.symbol?.includes('USDC') ||
-                pool.symbol?.includes('USDT') ||
-                pool.symbol?.includes('DAI')
-                  ? 'Low'
-                  : 'Medium'
-              responseText += `${index + 1}. **${pool.symbol}**: **${pool.apy?.toFixed(2)}%** APY\n`
-              responseText += `   • TVL: $${(pool.tvlUsd / 1000000).toFixed(1)}M\n`
-              responseText += `   • Risk: ${riskLevel}\n`
-              responseText += `   • Chain: ${pool.chain}\n\n`
-            })
-
-            // Add recommendation
-            const bestToken = sortedAave[0]
-            if (bestToken) {
-              responseText += `💡 **Recommendation**: ${bestToken.symbol} offers the highest yield at ${bestToken.apy?.toFixed(2)}% APY. `
-
-              if (bestToken.symbol?.includes('USD')) {
-                responseText += `As a stablecoin, it provides stable returns with minimal price risk.\n\n`
-              } else {
-                responseText += `Consider the volatility risk of this asset in your portfolio allocation.\n\n`
-              }
-            }
-          } else {
-            // Fallback to general analysis if Aave-specific fails
-            yields = await defiDataService.getTopYieldOpportunities(8, 1000000)
-            responseText = formatGeneralYieldResponse(yields)
-          }
-        } catch (error) {
-          logger.error('Error fetching Aave data:', error)
-          // Fallback to general yield analysis
-          yields = await defiDataService.getTopYieldOpportunities(8, 1000000)
-          responseText = formatGeneralYieldResponse(yields)
+      if (requestType === 'api') {
+        // Structured API response
+        const apiResponse = {
+          allocation: analysis.allocation,
+          confidence: analysis.confidence,
+          reasoning: analysis.reasoning,
+          marketAnalysis: analysis.marketAnalysis,
+          timestamp: analysis.timestamp,
         }
+
+        logger.info(
+          `API response generated with ${analysis.allocation.length} allocations, confidence: ${analysis.confidence}%`,
+        )
+        return apiResponse
       } else {
-        // General yield analysis
-        yields = await defiDataService.getTopYieldOpportunities(8, 1000000)
-        responseText = formatGeneralYieldResponse(yields)
+        // Conversational response with embedded structured data
+        const responseContent: Content = {
+          text: formatConversationalYieldResponse(analysis),
+          actions: ['ANALYZE_YIELD'],
+          source: message.content.source,
+        }
+
+        logger.info(
+          `Conversational response generated for ${inputToken} with ${analysis.allocation.length} opportunities`,
+        )
+        await callback(responseContent)
+        return responseContent
       }
-
-      responseText += `📊 **Data Sources:**\n`
-      responseText += `• DeFiLlama API (TVL & Protocol Data)\n`
-      responseText += `• CoinGecko API (Token Prices)\n`
-      responseText += `• Real-time protocol monitoring\n\n`
-      responseText += `⚠️ **Risk Disclaimer:** Always DYOR. Past performance doesn't guarantee future results. Consider protocol risks, smart contract risks, and market volatility.`
-
-      const responseContent: Content = {
-        text: responseText,
-        actions: ['ANALYZE_YIELD'],
-        source: message.content.source,
-      }
-
-      await callback(responseContent)
-      return responseContent
     } catch (error) {
       logger.error('Error in ANALYZE_YIELD action:', error)
 
-      const errorContent: Content = {
-        text: '❌ **Error fetching yield data**\n\nUnable to retrieve current yield opportunities. This might be due to API rate limits or network issues. Please try again in a few minutes.',
-        actions: ['ANALYZE_YIELD'],
-        source: message.content.source,
-      }
+      const requestType = detectRequestType(message)
 
-      await callback(errorContent)
-      return errorContent
+      if (requestType === 'api') {
+        // API error response
+        throw new Error(
+          `Yield analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        )
+      } else {
+        // Conversational error response
+        const errorContent: Content = {
+          text: '❌ **Error fetching yield data**\n\nUnable to retrieve current yield opportunities. This might be due to API rate limits or network issues. Please try again in a few minutes.',
+          actions: ['ANALYZE_YIELD'],
+          source: message.content.source,
+        }
+
+        await callback(errorContent)
+        return errorContent
+      }
     }
   },
 

@@ -2,86 +2,90 @@ import { Service, type IAgentRuntime, logger } from '@elizaos/core'
 import { defiDataService } from './dataService.js'
 
 /**
- * Enhanced Yield Optimization Service with real data monitoring
+ * Simplified Yield Optimization Service - MVP version without monitoring
+ * Rebalancing triggers removed as Chainlink Upkeep handles execution timing
  */
 export class YieldOptimizationService extends Service {
   static serviceType = 'yield_optimization'
   capabilityDescription =
-    'Monitors real DeFi protocols and provides live yield optimization insights'
-
-  private monitoringInterval?: NodeJS.Timeout
-  private lastUpdate = 0
+    'Provides yield optimization insights on-demand without background monitoring'
 
   constructor(runtime: IAgentRuntime) {
     super(runtime)
   }
 
   static async start(runtime: IAgentRuntime) {
-    logger.info('*** Starting Enhanced Yield Optimization Service ***')
+    logger.info('*** Starting Simplified Yield Optimization Service ***')
     const service = new YieldOptimizationService(runtime)
-
-    // Start monitoring protocols
-    await service.startMonitoring()
-
     return service
   }
 
   static async stop(runtime: IAgentRuntime) {
     logger.info('*** Stopping Yield Optimization Service ***')
-    const service = runtime.getService(YieldOptimizationService.serviceType)
-    if (!service) {
-      throw new Error('Yield Optimization service not found')
-    }
-    await service.stop()
+    // No cleanup needed as no background monitoring
   }
 
-  private async startMonitoring() {
-    // Initial data fetch
-    await this.checkYieldOpportunities()
-
-    // Monitor yield opportunities every 10 minutes
-    this.monitoringInterval = setInterval(
-      async () => {
-        try {
-          await this.checkYieldOpportunities()
-        } catch (error) {
-          logger.error('Error monitoring yield opportunities:', error)
-        }
-      },
-      10 * 60 * 1000,
-    )
+  async stop() {
+    logger.info('*** Stopping Yield Optimization Service instance ***')
+    // No cleanup needed as no background monitoring
   }
 
-  private async checkYieldOpportunities() {
+  /**
+   * Get current market snapshot for yield analysis
+   */
+  async getCurrentMarketSnapshot() {
     try {
-      logger.info('Fetching real-time yield opportunities...')
+      logger.info('Fetching current market snapshot...')
 
       const [topYields, stableYields, protocols] = await Promise.all([
-        defiDataService.getTopYieldOpportunities(5),
+        defiDataService.getTopYieldOpportunities(10),
         defiDataService.getStablecoinYields(),
         defiDataService.getProtocols(),
       ])
 
-      this.lastUpdate = Date.now()
-
-      // Log market summary
+      // Calculate market metrics
       const avgYield =
         topYields.reduce((sum, pool) => sum + (pool.apy || 0), 0) /
         topYields.length
       const totalTVL = protocols.reduce((sum, p) => sum + (p.tvl || 0), 0)
 
       logger.info(
-        `Market update: ${topYields.length} opportunities found, avg ${avgYield.toFixed(1)}% APY, $${(totalTVL / 1_000_000_000).toFixed(1)}B total TVL`,
+        `Market snapshot: ${topYields.length} opportunities, avg ${avgYield.toFixed(1)}% APY, $${(totalTVL / 1_000_000_000).toFixed(1)}B total TVL`,
       )
+
+      return {
+        topYields,
+        stableYields,
+        protocols,
+        metrics: {
+          averageYield: avgYield,
+          totalTVL,
+          timestamp: new Date().toISOString(),
+        },
+      }
     } catch (error) {
-      logger.error('Error checking yield opportunities:', error)
+      logger.error('Error fetching market snapshot:', error)
+      throw error
     }
   }
 
-  async stop() {
-    logger.info('*** Stopping Yield Optimization Service instance ***')
-    if (this.monitoringInterval) {
-      clearInterval(this.monitoringInterval)
+  /**
+   * Validate if a yield opportunity is still available
+   */
+  async validateYieldOpportunity(
+    protocol: string,
+    expectedAPY: number,
+  ): Promise<boolean> {
+    try {
+      const pools = await defiDataService.getPoolsByProtocol(protocol)
+      const currentAPY = pools.length > 0 ? pools[0].apy : 0
+
+      // Check if current APY is within 10% of expected
+      const tolerance = expectedAPY * 0.1
+      return Math.abs((currentAPY || 0) - expectedAPY) <= tolerance
+    } catch (error) {
+      logger.error(`Error validating opportunity for ${protocol}:`, error)
+      return false
     }
   }
 }

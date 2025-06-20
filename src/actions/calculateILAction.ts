@@ -7,6 +7,11 @@ import type {
   State,
 } from '@elizaos/core'
 import { logger } from '@elizaos/core'
+
+/**
+ * Simplified IL calculation for user education only
+ * Complex calculations removed as per MVP requirements
+ */
 import { defiDataService } from '../services/dataService.js'
 
 /**
@@ -40,7 +45,6 @@ export const calculateILAction: Action = {
     state: State,
     options: any,
     callback: HandlerCallback,
-    responses: Memory[],
   ) => {
     try {
       logger.info('Calculating impermanent loss with real examples')

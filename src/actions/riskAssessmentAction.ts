@@ -39,7 +39,6 @@ export const riskAssessmentAction: Action = {
     state: State,
     options: any,
     callback: HandlerCallback,
-    responses: Memory[],
   ) => {
     try {
       logger.info('Assessing DeFi risks with real data')

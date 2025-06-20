@@ -7,6 +7,11 @@ import type {
   State,
 } from '@elizaos/core'
 import { logger } from '@elizaos/core'
+
+/**
+ * Simplified historical analysis - basic performance queries only
+ * Complex backtesting removed as per MVP requirements
+ */
 import { defiDataService } from '../services/dataService.js'
 
 /**
@@ -47,7 +52,6 @@ export const historicalAnalysisAction: Action = {
     state: State,
     options: any,
     callback: HandlerCallback,
-    responses: Memory[],
   ) => {
     try {
       logger.info('Analyzing pool historical data')
