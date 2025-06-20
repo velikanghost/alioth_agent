@@ -30,6 +30,26 @@ const configSchema = z.object({
 })
 
 /**
+ * Helper function to format general yield response
+ */
+const formatGeneralYieldResponse = (yields: any[]): string => {
+  let response = `🔍 **Live Yield Analysis** 📊\n\n**🚀 Top Yield Opportunities:**\n\n`
+
+  yields.slice(0, 6).forEach((yield_, index) => {
+    const riskLevel =
+      yield_.symbol?.includes('USD') || yield_.symbol?.includes('stETH')
+        ? 'Low'
+        : 'Medium'
+    response += `${index + 1}. **${yield_.project}** (${yield_.chain}): **${yield_.apy?.toFixed(1)}%** APY\n`
+    response += `   • Asset: ${yield_.symbol}\n`
+    response += `   • TVL: $${(yield_.tvlUsd / 1000000).toFixed(1)}M\n`
+    response += `   • Risk: ${riskLevel}\n\n`
+  })
+
+  return response
+}
+
+/**
  * Yield Analysis Action - Now using real DeFi data
  */
 const analyzeYieldAction: Action = {
@@ -50,7 +70,13 @@ const analyzeYieldAction: Action = {
       text.includes('farming') ||
       text.includes('opportunities') ||
       text.includes('best rates') ||
-      text.includes('defi')
+      text.includes('defi') ||
+      text.includes('aave') ||
+      text.includes('compound') ||
+      text.includes('supply') ||
+      text.includes('lend') ||
+      text.includes('best token') ||
+      text.includes('protocol')
     )
   },
 
@@ -63,45 +89,84 @@ const analyzeYieldAction: Action = {
     responses: Memory[],
   ) => {
     try {
-      logger.info('🔍 Fetching real-time yield opportunities from web search')
+      logger.info(
+        '🔍 Fetching real-time yield opportunities from DeFi protocols',
+      )
 
-      // Create real-time yield service
-      const yieldService = createRealTimeYieldService(runtime)
+      const text = message.content.text?.toLowerCase() || ''
 
-      // Get current best yield opportunities using web search
-      const yields = await yieldService.getBestYieldOpportunities()
-      const stableYields = await yieldService.getStableYields()
+      // Check if user specifically mentioned Aave
+      const isAaveQuery = text.includes('aave')
+      const isSupplyQuery = text.includes('supply') || text.includes('lend')
 
-      if (yields.length === 0) {
-        const responseContent: Content = {
-          text: '⚠️ **Unable to fetch current yield data**\n\nWeb search services are temporarily unavailable. Using fallback data for basic yield information.',
-          actions: ['ANALYZE_YIELD'],
-          source: message.content.source,
+      let yields: any[] = []
+      let responseText = ''
+
+      if (isAaveQuery) {
+        // Get specific Aave data
+        logger.info('🎯 Analyzing Aave supply opportunities')
+
+        try {
+          // Get Aave-specific pools from dataService
+          const aavePools = await defiDataService.getPoolsByProtocol('Aave')
+
+          if (aavePools.length > 0) {
+            // Sort by APY descending
+            const sortedAave = aavePools.sort(
+              (a, b) => (b.apy || 0) - (a.apy || 0),
+            )
+
+            responseText = `🎯 **Aave V3 Supply Analysis** 📊\n\n**🚀 Best Aave Supply Opportunities:**\n\n`
+
+            sortedAave.slice(0, 5).forEach((pool, index) => {
+              const riskLevel =
+                pool.symbol?.includes('USDC') ||
+                pool.symbol?.includes('USDT') ||
+                pool.symbol?.includes('DAI')
+                  ? 'Low'
+                  : 'Medium'
+              responseText += `${index + 1}. **${pool.symbol}**: **${pool.apy?.toFixed(2)}%** APY\n`
+              responseText += `   • TVL: $${(pool.tvlUsd / 1000000).toFixed(1)}M\n`
+              responseText += `   • Risk: ${riskLevel}\n`
+              responseText += `   • Chain: ${pool.chain}\n\n`
+            })
+
+            // Add recommendation
+            const bestToken = sortedAave[0]
+            if (bestToken) {
+              responseText += `💡 **Recommendation**: ${bestToken.symbol} offers the highest yield at ${bestToken.apy?.toFixed(2)}% APY. `
+
+              if (bestToken.symbol?.includes('USD')) {
+                responseText += `As a stablecoin, it provides stable returns with minimal price risk.\n\n`
+              } else {
+                responseText += `Consider the volatility risk of this asset in your portfolio allocation.\n\n`
+              }
+            }
+          } else {
+            // Fallback to general analysis if Aave-specific fails
+            yields = await defiDataService.getTopYieldOpportunities(8, 1000000)
+            responseText = formatGeneralYieldResponse(yields)
+          }
+        } catch (error) {
+          logger.error('Error fetching Aave data:', error)
+          // Fallback to general yield analysis
+          yields = await defiDataService.getTopYieldOpportunities(8, 1000000)
+          responseText = formatGeneralYieldResponse(yields)
         }
-        await callback(responseContent)
-        return responseContent
+      } else {
+        // General yield analysis
+        yields = await defiDataService.getTopYieldOpportunities(8, 1000000)
+        responseText = formatGeneralYieldResponse(yields)
       }
 
-      // Format the response using the service's built-in formatter
-      const formattedResponse = yieldService.formatYieldsForDisplay(yields)
-
-      // Add stable yields section
-      const stableYieldsList = stableYields
-        .slice(0, 3)
-        .map((yield_) => {
-          return `**${yield_.protocol}**: ${yield_.apy.toFixed(1)}% APY (${yield_.asset}) - Risk: ${yield_.risk}`
-        })
-        .join('\n')
+      responseText += `📊 **Data Sources:**\n`
+      responseText += `• DeFiLlama API (TVL & Protocol Data)\n`
+      responseText += `• CoinGecko API (Token Prices)\n`
+      responseText += `• Real-time protocol monitoring\n\n`
+      responseText += `⚠️ **Risk Disclaimer:** Always DYOR. Past performance doesn't guarantee future results. Consider protocol risks, smart contract risks, and market volatility.`
 
       const responseContent: Content = {
-        text:
-          formattedResponse +
-          `\n\n**🛡️ Stable Yields (Conservative):**\n${stableYieldsList}\n\n` +
-          `📊 **Real-time Data Sources:**\n` +
-          `• Live web search of protocol websites\n` +
-          `• Cross-referenced yield information\n` +
-          `• Updated every 10 minutes\n\n` +
-          `*Note: Always verify rates on official protocol websites before investing.*`,
+        text: responseText,
         actions: ['ANALYZE_YIELD'],
         source: message.content.source,
       }
@@ -112,7 +177,7 @@ const analyzeYieldAction: Action = {
       logger.error('Error in ANALYZE_YIELD action:', error)
 
       const errorContent: Content = {
-        text: '❌ **Error fetching yield data**\n\nUnable to retrieve current yield opportunities via web search. This might be due to network issues or API rate limits. Please try again in a few minutes.',
+        text: '❌ **Error fetching yield data**\n\nUnable to retrieve current yield opportunities. This might be due to API rate limits or network issues. Please try again in a few minutes.',
         actions: ['ANALYZE_YIELD'],
         source: message.content.source,
       }
