@@ -54,24 +54,32 @@ const performYieldAnalysis = async (params: {
 }): Promise<YieldAnalysisResponse> => {
   const { inputToken, inputAmount, riskTolerance } = params
 
-  // Get current market data
-  const [topYields, stableYields, protocols] = await Promise.all([
+  // Get current market data (only supported protocols)
+  const [topYields, stableYields] = await Promise.all([
     defiDataService.getTopYieldOpportunities(10, 1_000_000),
     defiDataService.getStablecoinYields(),
-    defiDataService.getProtocols(),
   ])
+
+  // Get only supported protocols for market analysis
+  const supportedProtocolNames = ['Aave', 'Compound']
 
   // Filter opportunities based on input token and risk tolerance
   let filteredOpportunities = topYields.filter((pool) =>
     pool.symbol?.toUpperCase().includes(inputToken.toUpperCase()),
   )
 
-  // If no specific token matches, get general opportunities
+  // If no specific token matches, get general opportunities based on risk tolerance
   if (filteredOpportunities.length === 0) {
-    filteredOpportunities =
-      riskTolerance === 'conservative'
-        ? stableYields.slice(0, 5)
-        : topYields.slice(0, 5)
+    if (riskTolerance === 'conservative') {
+      // Conservative: prefer stablecoins
+      filteredOpportunities = stableYields.slice(0, 4)
+    } else {
+      // Moderate/Aggressive: mix of stable and higher yield opportunities
+      filteredOpportunities = [
+        ...stableYields.slice(0, 2),
+        ...topYields.slice(0, 2),
+      ]
+    }
   }
 
   // Convert to protocol allocations
@@ -87,21 +95,22 @@ const performYieldAnalysis = async (params: {
     }),
   )
 
-  // Calculate market data
-  const totalTvl = protocols.reduce((sum, p) => sum + (p.tvl || 0), 0)
+  // Calculate market data from our filtered pools
+  const allPools = [...topYields, ...stableYields]
+  const totalTvl = allPools.reduce((sum, pool) => sum + (pool.tvlUsd || 0), 0)
   const averageYield =
-    topYields.length > 0
-      ? topYields.reduce((sum, pool) => sum + (pool.apy || 0), 0) /
-        topYields.length
+    allPools.length > 0
+      ? allPools.reduce((sum, pool) => sum + (pool.apy || 0), 0) /
+        allPools.length
       : 8
 
   const marketData: MarketData = {
     timestamp: new Date().toISOString(),
     totalTvl,
     averageYield,
-    topProtocols: protocols.slice(0, 5).map((p) => p.name || 'Unknown'),
+    topProtocols: supportedProtocolNames, // Only show supported protocols
     marketCondition:
-      averageYield > 15 ? 'bull' : averageYield < 5 ? 'bear' : 'sideways',
+      averageYield > 12 ? 'bull' : averageYield < 8 ? 'bear' : 'sideways', // Adjusted thresholds for realistic yields
   }
 
   // Generate reasoning based on risk tolerance and market conditions

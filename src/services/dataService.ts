@@ -177,23 +177,14 @@ export class DeFiDataService {
         const response = await axios.get(`${this.yields_base}/pools`)
         const pools = response.data?.data || []
 
-        // Filter for major protocols and reasonable TVL
+        // Filter for testnet-supported protocols only (Aave and Compound-v3)
+        const supportedProtocols = ['aave', 'compound']
         const filteredPools = pools.filter((pool: any) => {
-          const majorProtocols = [
-            'aave',
-            'compound',
-            'curve',
-            'convex',
-            'lido',
-            'uniswap',
-            'rocket-pool',
-            'yearn',
-          ]
           const isValidPool =
             pool.tvlUsd > 1000000 && // Min $1M TVL
             pool.apy > 0 &&
             pool.apy < 500 && // Exclude unrealistic APYs
-            majorProtocols.some(
+            supportedProtocols.some(
               (protocol) =>
                 pool.project?.toLowerCase().includes(protocol) ||
                 pool.pool?.toLowerCase().includes(protocol),
@@ -627,10 +618,18 @@ export class DeFiDataService {
   ): Promise<PoolData[]> {
     const pools = await this.getYieldPools()
 
-    // Filter and rank pools more intelligently
+    // Filter for testnet-supported protocols and rank pools intelligently
+    const supportedProtocols = ['aave', 'compound']
     const validPools = pools
       .filter((pool) => {
+        const isSupported = supportedProtocols.some(
+          (protocol) =>
+            pool.project?.toLowerCase().includes(protocol) ||
+            pool.pool?.toLowerCase().includes(protocol),
+        )
+
         return (
+          isSupported && // Only supported protocols
           pool.apy !== undefined &&
           pool.apy > 1 && // Must have at least 1% APY to be meaningful
           pool.tvlUsd > minTvl &&
@@ -662,17 +661,29 @@ export class DeFiDataService {
   }
 
   /**
-   * Get stablecoin yields (low IL risk)
+   * Get stablecoin yields (low IL risk) - filtered for testnet-supported protocols
    */
   async getStablecoinYields(): Promise<PoolData[]> {
     const pools = await this.getYieldPools()
     const stablecoinSymbols = ['USDC', 'USDT', 'DAI', 'FRAX', 'LUSD', 'sUSD']
+    const supportedProtocols = ['aave', 'compound']
 
     return pools
       .filter((pool) => {
         // Check if the symbol contains stablecoin names
         const symbol = pool.symbol.toUpperCase()
-        return stablecoinSymbols.some((stable) => symbol.includes(stable))
+        const hasStablecoin = stablecoinSymbols.some((stable) =>
+          symbol.includes(stable),
+        )
+
+        // Check if protocol is supported
+        const isSupported = supportedProtocols.some(
+          (protocol) =>
+            pool.project?.toLowerCase().includes(protocol) ||
+            pool.pool?.toLowerCase().includes(protocol),
+        )
+
+        return hasStablecoin && isSupported
       })
       .sort((a, b) => (b.apy || 0) - (a.apy || 0))
   }

@@ -1,9 +1,7 @@
-import type { Memory } from '@elizaos/core'
-
 // Core request/response interfaces for dual-mode functionality
 export interface YieldAnalysisRequest {
-  inputToken: string // "USDC" | "0xA0b86a33E6FC17036E8b9d2C33F67Df04D6DAB07"
-  inputAmount: string // "1000000000" (1000 USDC in wei) | "1000"
+  inputTokenAddress?: string // "0xA0b86a33E6FC17036E8b9d2C33F67Df04D6DAB07"
+  usdAmount: number // 1000 (USD amount as number)
   riskTolerance: 'conservative' | 'moderate' | 'aggressive'
   userAddress?: string // Optional for personalized analysis
 }

@@ -1,69 +1,93 @@
 # Alioth AI Agent Enhanced Implementation Focus
-## Target: Dual-Mode ElizaOS Agent (Conversational + API)
+## Target: Swap-Executing ElizaOS Agent for DeFi Yield Optimization
 
 ### 🎯 **Core Architecture Philosophy**
-The agent provides **dual-mode functionality**:
-1. **Conversational Mode**: Natural language interactions with human-readable responses
-2. **API Mode**: Structured input/output for backend integration
-3. **Unified Logic**: Same core analysis engine serves both modes
+The agent provides **swap-first optimization**:
+1. **Market Analysis**: Analyze DeFiLlama data and protocol yields
+2. **Swap Execution**: Execute optimal token swaps via DEX aggregators
+3. **Ready-to-Deposit Strategy**: Return final tokens ready for protocol deposits
+4. **Dual Mode Support**: Conversational + structured API responses
 
 ## 🔄 **Enhanced Action Architecture**
 
-### **Primary Actions to Enhance (Keep + Improve)**
+### **Primary Actions - Swap-Enabled Implementation**
 
-#### **1. Yield Analysis Action** ✅ (ENHANCE EXISTING)
+#### **1. Yield Analysis with Swap Execution** ✅ (MAJOR ENHANCEMENT)
 ```typescript
 // Location: src/actions/analyzeYieldAction.ts
 export const analyzeYieldAction = {
-  name: "ANALYZE_YIELD",
-  description: "Dual-mode yield analysis: conversational + structured API responses",
+  name: "ANALYZE_YIELD_WITH_SWAPS",
+  description: "Complete yield optimization: analysis + swap execution + deposit strategy",
   
   validate: async (runtime, message, state) => {
-    // Keep existing natural language validation for chat
     const text = message.content.text?.toLowerCase() || '';
     const isConversational = text.includes('yield') || text.includes('apy') || 
-                            text.includes('opportunities') || text.includes('best');
+                            text.includes('optimize') || text.includes('best');
     
-    // Add API request detection
+    // API request detection for backend integration
     const isAPIRequest = message.content.structured === true ||
-                        (message.content.inputToken && message.content.inputAmount);
+                        (message.content.inputTokenAddress && message.content.usdAmount);
     
     return isConversational || isAPIRequest;
   },
   
   handler: async (runtime, message, state, options, callback) => {
-    // Detect request type
     const requestType = detectRequestType(message);
     
-    // Core analysis logic (shared)
-    const analysis = await performYieldAnalysis({
-      inputToken: extractInputToken(message),
-      inputAmount: extractInputAmount(message),
-      riskTolerance: extractRiskTolerance(message) || 'moderate'
+    // Step 1: Extract parameters
+    const inputTokenAddress = extractInputTokenAddress(message);
+    const usdAmount = extractUSDAmount(message);
+    const riskTolerance = extractRiskTolerance(message) || 'moderate';
+    
+    // Step 2: Analyze optimal protocols and tokens
+    const marketAnalysis = await analyzeMarketConditions();
+    const optimalAllocation = await calculateOptimalAllocation({
+      inputTokenAddress,
+      usdAmount,
+      riskTolerance,
+      availableProtocols: ['aave', 'compound', 'yearn'],
+      marketData: marketAnalysis
     });
     
+    // Step 3: Execute required swaps
+    const swapResults = await executeOptimalSwaps({
+      inputToken: inputTokenAddress,
+      targetAllocations: optimalAllocation,
+      maxSlippage: 0.005 // 0.5%
+    });
+    
+    // Step 4: Prepare final deposit strategy
+    const finalStrategy = {
+      swapsExecuted: swapResults,
+      finalAllocation: swapResults.map(swap => ({
+        protocol: swap.targetProtocol,
+        token: swap.outputToken,
+        amount: swap.actualOutput,
+        expectedAPY: swap.expectedAPY,
+        riskScore: swap.riskScore
+      })),
+      totalExpectedAPY: calculateWeightedAPY(swapResults),
+      confidence: calculateConfidence(swapResults),
+      reasoning: generateSwapReasoning(optimalAllocation, swapResults)
+    };
+    
     if (requestType === 'api') {
-      // Structured API response
+      // Structured API response for backend
       return {
-        allocation: analysis.allocation,
-        confidence: analysis.confidence,
-        reasoning: analysis.reasoning,
-        marketAnalysis: analysis.marketData,
+        swapsExecuted: finalStrategy.swapsExecuted,
+        finalAllocation: finalStrategy.finalAllocation,
+        totalExpectedAPY: finalStrategy.totalExpectedAPY,
+        confidence: finalStrategy.confidence,
+        reasoning: finalStrategy.reasoning,
         timestamp: new Date().toISOString()
       };
     } else {
       // Conversational response with embedded structured data
       const responseContent = {
-        text: formatConversationalYieldResponse(analysis),
-        actions: ['ANALYZE_YIELD'],
+        text: formatConversationalSwapResponse(finalStrategy),
+        actions: ['ANALYZE_YIELD_WITH_SWAPS'],
         source: message.content.source,
-        // Add structured data for advanced clients
-        structured: {
-          allocation: analysis.allocation,
-          confidence: analysis.confidence,
-          reasoning: analysis.reasoning,
-          marketAnalysis: analysis.marketData
-        }
+        structured: finalStrategy
       };
       
       await callback(responseContent);
@@ -72,217 +96,292 @@ export const analyzeYieldAction = {
   }
 };
 
-// Core analysis interface (used by both modes)
-interface YieldAnalysisRequest {
-  inputToken: string;      // "USDC" | "0xA0b86a33E6FC17036E8b9d2C33F67Df04D6DAB07"
-  inputAmount: string;     // "1000000000" (1000 USDC in wei) | "1000"
-  riskTolerance: 'conservative' | 'moderate' | 'aggressive';
-  userAddress?: string;    // Optional for personalized analysis
+// Core swap execution interface
+interface SwapExecutionRequest {
+  inputToken: string;           // "0xA0b86a33E6FC17036E8b9d2C33F67Df04D6DAB07" (USDC)
+  targetAllocations: {
+    protocol: string;           // "aave"
+    targetToken: string;        // "WETH"
+    percentage: number;         // 60
+    expectedAPY: number;        // 4.2
+  }[];
+  maxSlippage: number;         // 0.005
 }
 
-interface YieldAnalysisResponse {
-  allocation: ProtocolAllocation[];
-  confidence: number;      // 0-100
+interface SwapResult {
+  fromToken: string;           // "USDC"
+  toToken: string;            // "WETH"
+  inputAmount: string;        // "600000000" (600 USDC)
+  actualOutput: string;       // "0.3 WETH"
+  executedPrice: number;      // Actual swap rate
+  slippage: number;          // Actual slippage experienced
+  gasUsed: number;           // Gas cost for swap
+  targetProtocol: string;    // "aave"
+  expectedAPY: number;       // 4.2
+  riskScore: number;         // 3
+  swapHash: string;          // Transaction hash
+}
+
+interface FinalAllocationStrategy {
+  swapsExecuted: SwapResult[];
+  finalAllocation: {
+    protocol: 'aave' | 'compound' | 'yearn';
+    token: string;             // Ready-to-deposit token address
+    amount: string;            // Ready-to-deposit amount
+    expectedAPY: number;
+    riskScore: number;
+  }[];
+  totalExpectedAPY: number;
+  confidence: number;
   reasoning: string;
-  marketAnalysis: MarketData;
-  timestamp: string;
 }
 ```
 
-#### **2. Portfolio Optimization Action** ✅ (ENHANCE WITH FIXED STRATEGIES)
+#### **2. DEX Aggregator Integration Service** ✅ (NEW CORE SERVICE)
 ```typescript
-// Location: src/actions/optimizePortfolioAction.ts
-// KEEP existing conversational functionality
-// ADD your fixed allocation strategies
+// Location: src/services/dexAggregatorService.ts
+export class DEXAggregatorService {
+  private readonly SUPPORTED_DEXS = {
+    '1inch': {
+      apiUrl: 'https://api.1inch.io/v5.0/11155111', // Sepolia
+      reliability: 0.95
+    },
+    paraswap: {
+      apiUrl: 'https://apiv5.paraswap.io',
+      reliability: 0.92
+    },
+    uniswap: {
+      reliability: 0.98
+    }
+  };
 
-const ALLOCATION_STRATEGIES = {
-  conservative: { 
-    stablecoins: 70, 
-    bluechip: 25, 
-    riskAssets: 5,
-    description: "Capital preservation focused, stable yields",
-    targetAPY: "4-6%"
-  },
-  moderate: { 
-    stablecoins: 50, 
-    bluechip: 30, 
-    riskAssets: 20,
-    description: "Balanced risk-reward, diversified approach", 
-    targetAPY: "6-10%"
-  },
-  aggressive: { 
-    stablecoins: 25, 
-    bluechip: 25, 
-    riskAssets: 50,
-    description: "Growth focused, higher risk tolerance",
-    targetAPY: "10-15%+"
+  async findOptimalSwapRoute(params: SwapParams): Promise<SwapRoute> {
+    // 1. Query multiple DEX aggregators
+    const routes = await Promise.all([
+      this.get1inchQuote(params),
+      this.getParaswapQuote(params),
+      this.getUniswapQuote(params)
+    ]);
+
+    // 2. Score routes by: output amount, gas cost, slippage, reliability
+    const scoredRoutes = routes.map(route => ({
+      ...route,
+      score: this.calculateRouteScore(route)
+    }));
+
+    // 3. Return best route
+    return scoredRoutes.sort((a, b) => b.score - a.score)[0];
   }
-};
 
-// Enhanced to support both chat and API requests
-handler: async (runtime, message, state, options, callback) => {
-  const requestType = detectRequestType(message);
-  const riskTolerance = extractRiskTolerance(message) || 'moderate';
-  
-  // Get current market data
-  const marketData = await fetchCurrentMarketData();
-  
-  // Apply your fixed allocation strategy
-  const baseStrategy = ALLOCATION_STRATEGIES[riskTolerance];
-  
-  // Calculate specific protocol allocations within each category
-  const detailedAllocation = await calculateDetailedAllocation(baseStrategy, marketData);
-  
-  if (requestType === 'api') {
-    return {
-      strategy: riskTolerance,
-      allocation: detailedAllocation,
-      expectedAPY: calculateExpectedAPY(detailedAllocation),
-      confidence: 90, // High confidence in fixed strategies
-      reasoning: `${baseStrategy.description}. Allocation: ${baseStrategy.stablecoins}% stables, ${baseStrategy.bluechip}% blue-chip, ${baseStrategy.riskAssets}% risk assets.`
-    };
-  } else {
-    // Keep existing conversational format + add structured data
-    const responseContent = {
-      text: formatPortfolioResponse(baseStrategy, detailedAllocation, marketData),
-      actions: ['OPTIMIZE_PORTFOLIO'],
-      source: message.content.source,
-      structured: {
-        strategy: riskTolerance,
-        allocation: detailedAllocation,
-        expectedAPY: calculateExpectedAPY(detailedAllocation),
-        confidence: 90
-      }
-    };
+  async executeSwap(route: SwapRoute): Promise<SwapResult> {
+    try {
+      // Execute swap via selected DEX
+      const txHash = await this.executeSwapTransaction(route);
+      
+      // Wait for confirmation
+      const receipt = await this.waitForConfirmation(txHash);
+      
+      return {
+        fromToken: route.fromToken,
+        toToken: route.toToken,
+        inputAmount: route.inputAmount,
+        actualOutput: receipt.actualOutput,
+        executedPrice: receipt.executedPrice,
+        slippage: this.calculateSlippage(route.expectedOutput, receipt.actualOutput),
+        gasUsed: receipt.gasUsed,
+        targetProtocol: route.targetProtocol,
+        expectedAPY: route.expectedAPY,
+        riskScore: route.riskScore,
+        swapHash: txHash
+      };
+    } catch (error) {
+      throw new Error(`Swap execution failed: ${error.message}`);
+    }
+  }
+
+  private calculateRouteScore(route: SwapRoute): number {
+    // Scoring algorithm: 40% output amount, 30% gas efficiency, 20% slippage, 10% reliability
+    const outputScore = (route.expectedOutput / route.inputAmount) * 0.4;
+    const gasScore = (1 / route.gasEstimate) * 0.3;
+    const slippageScore = (1 - route.priceImpact) * 0.2;
+    const reliabilityScore = route.reliability * 0.1;
     
-    await callback(responseContent);
-    return responseContent;
+    return outputScore + gasScore + slippageScore + reliabilityScore;
   }
-};
+}
 ```
 
-#### **3. Risk Assessment Action** ✅ (ENHANCE EXISTING)
+#### **3. Market Analysis with DeFiLlama Integration** ✅ (ENHANCED)
 ```typescript
-// Location: src/actions/riskAssessmentAction.ts
-// KEEP conversational functionality
-// ADD structured risk scoring for API consumption
-
-handler: async (runtime, message, state, options, callback) => {
-  const requestType = detectRequestType(message);
-  const protocolName = extractProtocolName(message);
-  
-  const riskAnalysis = await calculateProtocolRisk(protocolName);
-  
-  if (requestType === 'api') {
+// Location: src/services/marketAnalysisService.ts
+export class MarketAnalysisService {
+  async analyzeMarketConditions(): Promise<MarketAnalysis> {
+    // 1. Fetch protocol yields from DeFiLlama
+    const protocolYields = await this.fetchDeFiLlamaYields();
+    
+    // 2. Analyze token volatility and correlations
+    const volatilityData = await this.fetchVolatilityData();
+    
+    // 3. Get liquidity depth for major tokens
+    const liquidityData = await this.fetchLiquidityData();
+    
     return {
-      protocol: protocolName,
-      overallRisk: riskAnalysis.overallRisk,
-      riskBreakdown: riskAnalysis.breakdown,
-      riskFactors: riskAnalysis.factors,
-      mitigation: riskAnalysis.mitigation,
-      recommendation: riskAnalysis.recommendation
+      protocolYields,
+      volatilityData,
+      liquidityData,
+      recommendations: this.generateRecommendations(protocolYields, volatilityData),
+      timestamp: new Date()
     };
-  } else {
-    // Keep existing conversational format
-    const responseContent = {
-      text: formatConversationalRiskResponse(riskAnalysis),
-      actions: ['ASSESS_RISK'],
-      source: message.content.source,
-      structured: riskAnalysis
+  }
+
+  async calculateOptimalAllocation(params: OptimizationParams): Promise<AllocationPlan> {
+    const { inputTokenAddress, usdAmount, riskTolerance, marketData } = params;
+    
+    // Apply risk-based allocation strategies
+    const baseStrategy = this.getRiskBasedStrategy(riskTolerance);
+    
+    // Find best protocols for each allocation category
+    const optimalProtocols = await this.findOptimalProtocols(baseStrategy, marketData);
+    
+    // Determine required swaps
+    const requiredSwaps = this.calculateRequiredSwaps(
+      inputTokenAddress,
+      usdAmount,
+      optimalProtocols
+    );
+    
+    return {
+      targetAllocations: optimalProtocols,
+      requiredSwaps,
+      expectedAPY: this.calculateExpectedAPY(optimalProtocols),
+      riskScore: this.calculateRiskScore(optimalProtocols)
+    };
+  }
+
+  private getRiskBasedStrategy(riskTolerance: string): AllocationStrategy {
+    const strategies = {
+      conservative: { stablecoins: 70, bluechip: 25, riskAssets: 5 },
+      moderate: { stablecoins: 50, bluechip: 30, riskAssets: 20 },
+      aggressive: { stablecoins: 25, bluechip: 25, riskAssets: 50 }
     };
     
-    await callback(responseContent);
-    return responseContent;
+    return strategies[riskTolerance] || strategies.moderate;
   }
-};
+}
 ```
 
-### **Actions to Remove/Simplify** ❌
-
-#### **Remove These Features:**
-1. **Rebalancing Triggers** - Chainlink Upkeep handles execution timing
-2. **YieldOptimizationService.monitoringInterval** - Not needed for MVP
-3. **Complex historical backtesting** - Simplify to basic performance data
-
-#### **Keep These Files But Simplify:**
+#### **4. Wallet Management Service** ✅ (NEW CRITICAL SERVICE)
 ```typescript
-// SIMPLIFY: src/actions/calculateILAction.ts
-// Remove complex calculations, keep basic IL estimation for user education
+// Location: src/services/walletService.ts
+export class WalletService {
+  private wallet: ethers.Wallet;
+  
+  constructor() {
+    // Initialize wallet from secure environment variable
+    const privateKey = process.env.AI_AGENT_PRIVATE_KEY;
+    this.wallet = new ethers.Wallet(privateKey, provider);
+  }
 
-// SIMPLIFY: src/actions/historicalAnalysisAction.ts  
-// Remove backtesting, keep simple performance queries
+  async executeSwapTransaction(swapData: SwapData): Promise<string> {
+    // 1. Prepare transaction
+    const tx = {
+      to: swapData.targetContract,
+      data: swapData.calldata,
+      value: swapData.value,
+      gasLimit: swapData.gasLimit,
+      gasPrice: await this.getOptimalGasPrice()
+    };
+
+    // 2. Sign and send transaction
+    const signedTx = await this.wallet.signTransaction(tx);
+    const txResponse = await provider.sendTransaction(signedTx);
+    
+    return txResponse.hash;
+  }
+
+  async getBalance(tokenAddress: string): Promise<bigint> {
+    if (tokenAddress === ethers.constants.AddressZero) {
+      return await provider.getBalance(this.wallet.address);
+    } else {
+      const tokenContract = new ethers.Contract(tokenAddress, ERC20_ABI, provider);
+      return await tokenContract.balanceOf(this.wallet.address);
+    }
+  }
+
+  getAddress(): string {
+    return this.wallet.address;
+  }
+}
 ```
 
 ## 🔧 **Core Implementation Utilities**
 
-### **Request Type Detection**
+### **Enhanced Request Detection**
 ```typescript
 // Location: src/utils/requestDetection.ts
 export const detectRequestType = (message: Memory): 'conversational' | 'api' => {
-  // API request indicators
+  // API request indicators for backend integration
   const hasStructuredFlag = message.content.structured === true;
-  const hasAPIParameters = message.content.inputToken && message.content.inputAmount;
-  const isJSONFormat = isValidJSON(message.content.text);
+  const hasAPIParameters = message.content.inputTokenAddress && message.content.usdAmount;
+  const isBackendRequest = message.content.source === 'backend';
   
-  if (hasStructuredFlag || hasAPIParameters || isJSONFormat) {
+  if (hasStructuredFlag || hasAPIParameters || isBackendRequest) {
     return 'api';
   }
   
   return 'conversational';
 };
 
-export const extractInputToken = (message: Memory): string => {
+export const extractInputTokenAddress = (message: Memory): string => {
   // Handle both API and conversational inputs
-  if (message.content.inputToken) return message.content.inputToken;
+  if (message.content.inputTokenAddress) return message.content.inputTokenAddress;
   
   // Extract from natural language
   const text = message.content.text?.toLowerCase() || '';
-  if (text.includes('usdc')) return 'USDC';
-  if (text.includes('dai')) return 'DAI';
-  if (text.includes('usdt')) return 'USDT';
+  if (text.includes('usdc')) return '0xA0b86a33E6FC17036E8b9d2C33F67Df04D6DAB07'; // Sepolia USDC
+  if (text.includes('dai')) return '0x6B175474E89094C44Da98b954EedeAC495271d0F'; // Sepolia DAI
   
-  return 'USDC'; // Default
+  return '0xA0b86a33E6FC17036E8b9d2C33F67Df04D6DAB07'; // Default to USDC
 };
 
-export const extractRiskTolerance = (message: Memory): 'conservative' | 'moderate' | 'aggressive' => {
-  if (message.content.riskTolerance) return message.content.riskTolerance;
+export const extractUSDAmount = (message: Memory): number => {
+  if (message.content.usdAmount) return message.content.usdAmount;
   
-  const text = message.content.text?.toLowerCase() || '';
-  if (text.includes('conservative') || text.includes('safe')) return 'conservative';
-  if (text.includes('aggressive') || text.includes('risky')) return 'aggressive';
+  // Extract from natural language
+  const text = message.content.text || '';
+  const amountMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:usd|dollars?)/i);
   
-  return 'moderate'; // Default
+  return amountMatch ? parseFloat(amountMatch[1]) : 1000; // Default 1000 USD
 };
 ```
 
-### **Response Formatters**
+### **Enhanced Response Formatters**
 ```typescript
 // Location: src/utils/responseFormatters.ts
-export const formatConversationalYieldResponse = (analysis: YieldAnalysisResponse): string => {
-  // Keep existing emoji-rich markdown format
-  return `🔍 **Live Yield Analysis** 📊\n\n` +
-         `**🚀 Top Opportunities for ${analysis.inputToken}:**\n\n` +
-         analysis.allocation.map((alloc, i) => 
-           `${i+1}. **${alloc.protocol}**: ${alloc.percentage}% → **${alloc.expectedAPY}%** APY\n`
+export const formatConversationalSwapResponse = (strategy: FinalAllocationStrategy): string => {
+  const totalSwaps = strategy.swapsExecuted.length;
+  const totalGasUsed = strategy.swapsExecuted.reduce((sum, swap) => sum + swap.gasUsed, 0);
+  
+  return `🔄 **Swap Execution Complete!** ⚡\n\n` +
+         `**✅ Executed ${totalSwaps} optimal swaps:**\n` +
+         strategy.swapsExecuted.map((swap, i) => 
+           `${i+1}. ${swap.fromToken} → ${swap.toToken}: ${swap.actualOutput}\n` +
+           `   💰 Price: ${swap.executedPrice} | 📊 Slippage: ${(swap.slippage * 100).toFixed(2)}%\n`
          ).join('') +
-         `\n💡 **Reasoning**: ${analysis.reasoning}\n` +
-         `🎯 **Confidence**: ${analysis.confidence}%`;
-};
-
-export const formatPortfolioResponse = (strategy: AllocationStrategy, allocation: DetailedAllocation, marketData: MarketData): string => {
-  return `📊 **${strategy.description}** 🎯\n\n` +
-         `**Allocation Breakdown:**\n` +
-         `• Stablecoins: ${strategy.stablecoins}% (${allocation.stablecoins.map(p => p.protocol).join(', ')})\n` +
-         `• Blue-chip DeFi: ${strategy.bluechip}% (${allocation.bluechip.map(p => p.protocol).join(', ')})\n` +
-         `• Risk Assets: ${strategy.riskAssets}% (${allocation.riskAssets.map(p => p.protocol).join(', ')})\n\n` +
-         `🎯 **Expected APY**: ${strategy.targetAPY}\n` +
-         `📊 **Market Context**: ${formatMarketContext(marketData)}`;
+         `\n🎯 **Ready-to-Deposit Strategy:**\n` +
+         strategy.finalAllocation.map((alloc, i) => 
+           `${i+1}. **${alloc.protocol}**: ${alloc.amount} ${alloc.token} → **${alloc.expectedAPY}%** APY\n`
+         ).join('') +
+         `\n💡 **Strategy**: ${strategy.reasoning}\n` +
+         `🎯 **Expected APY**: ${strategy.totalExpectedAPY}%\n` +
+         `⛽ **Total Gas Used**: ${totalGasUsed.toLocaleString()}\n` +
+         `🎯 **Confidence**: ${strategy.confidence}%`;
 };
 ```
 
 ## 🚀 **API Route Enhancement**
 
-### **Enhanced Routes**
+### **Enhanced Routes for Backend Integration**
 ```typescript
 // Location: src/routes/index.ts
 export const routes = [
@@ -290,31 +389,54 @@ export const routes = [
     path: '/api/v1/yield-analysis',
     method: 'POST',
     handler: async (req, res) => {
-      const request: YieldAnalysisRequest = req.body;
-      
-      // Create structured message for agent
-      const message = {
-        content: {
-          structured: true,
-          inputToken: request.inputToken,
-          inputAmount: request.inputAmount,
-          riskTolerance: request.riskTolerance,
-          userAddress: request.userAddress
-        }
-      };
-      
-      // Call existing analyzeYieldAction
-      const result = await analyzeYieldAction.handler(runtime, message, state, {}, () => {});
-      
-      res.json(result);
+      try {
+        const request = req.body;
+        
+        // Create structured message for agent
+        const message = {
+          content: {
+            structured: true,
+            inputTokenAddress: request.inputTokenAddress,
+            usdAmount: request.usdAmount,
+            riskTolerance: request.riskTolerance,
+            source: 'backend'
+          }
+        };
+        
+        // Call enhanced analyzeYieldAction with swap execution
+        const result = await analyzeYieldAction.handler(runtime, message, state, {}, () => {});
+        
+        // Return structured response for backend
+        res.json({
+          success: true,
+          data: result,
+          timestamp: new Date().toISOString()
+        });
+      } catch (error) {
+        res.status(500).json({
+          success: false,
+          error: error.message,
+          timestamp: new Date().toISOString()
+        });
+      }
     }
   },
   
   {
-    path: '/api/v1/portfolio-optimization',
-    method: 'POST', 
+    path: '/api/v1/health',
+    method: 'GET',
     handler: async (req, res) => {
-      // Similar pattern for portfolio optimization
+      // Health check including wallet balance and DEX connectivity
+      const walletBalance = await walletService.getBalance(ethers.constants.AddressZero);
+      const dexConnectivity = await dexAggregatorService.testConnectivity();
+      
+      res.json({
+        status: 'healthy',
+        walletAddress: walletService.getAddress(),
+        walletBalance: ethers.utils.formatEther(walletBalance),
+        dexConnectivity,
+        timestamp: new Date().toISOString()
+      });
     }
   }
 ];
@@ -322,65 +444,66 @@ export const routes = [
 
 ## 📋 **Implementation Phases**
 
-### **Phase 1: Core Enhancement** (2-3 days)
-1. ✅ **Add request type detection** to existing actions
-2. ✅ **Implement dual response modes** (keep conversational + add structured)
-3. ✅ **Integrate fixed allocation strategies** into portfolio action
-4. ✅ **Add response formatters** for both modes
+### **Phase 1: Swap Infrastructure** (3-4 days)
+1. ✅ **Implement DEXAggregatorService** with 1inch, Paraswap, Uniswap integration
+2. ✅ **Set up WalletService** with secure private key management
+3. ✅ **Add MarketAnalysisService** with DeFiLlama integration
+4. ✅ **Test swap execution** on Sepolia testnet
 
-### **Phase 2: API Integration** (1-2 days)  
-1. ✅ **Enhance routes** to support structured requests
-2. ✅ **Test API endpoints** with mock backend requests
-3. ✅ **Validate JSON responses** match expected format
-4. ✅ **Ensure backward compatibility** with conversational mode
+### **Phase 2: Enhanced Actions** (2-3 days)  
+1. ✅ **Enhance analyzeYieldAction** to include swap execution
+2. ✅ **Add swap result formatting** for both conversational and API modes
+3. ✅ **Implement error handling** for failed swaps
+4. ✅ **Add comprehensive logging** for swap operations
 
-### **Phase 3: Testing & Refinement** (1 day)
-1. ✅ **Test conversational interactions** (user chat)
-2. ✅ **Test API interactions** (backend integration)
-3. ✅ **Verify data consistency** between modes
-4. ✅ **Performance optimization**
+### **Phase 3: Backend Integration** (1-2 days)
+1. ✅ **Test API endpoints** with mock backend requests
+2. ✅ **Validate response formats** match backend expectations
+3. ✅ **Test full flow** from backend request to final allocation
+4. ✅ **Performance optimization** and error recovery
 
 ## 🎯 **Success Criteria**
 
 ### **Must Work Flawlessly:**
-1. ✅ **Chat User**: "What's the best yield for 1000 USDC?" → Gets emoji-rich response + structured data
-2. ✅ **API Request**: `{inputToken: "USDC", inputAmount: "1000", riskTolerance: "moderate"}` → Gets JSON response
-3. ✅ **Portfolio Question**: "How should I allocate my portfolio?" → Gets fixed strategy + detailed breakdown
-4. ✅ **Risk Question**: "How risky is Aave?" → Gets conversational analysis + structured risk scores
+1. ✅ **Backend Request**: `{inputTokenAddress: "0x...", usdAmount: 1000, riskTolerance: "moderate"}` 
+2. ✅ **AI Analysis**: Determines 60% should go to Aave WETH, 40% to Compound USDC
+3. ✅ **Swap Execution**: Executes 600 USDC → WETH swap via optimal DEX
+4. ✅ **Final Response**: Returns `[{protocol: "aave", token: "WETH", amount: "0.3"}, {protocol: "compound", token: "USDC", amount: "400"}]`
+5. ✅ **Backend Integration**: Backend receives ready-to-deposit allocation
 
 ### **Key Constraints:**
-- 🔒 **No rebalancing triggers** - Chainlink handles execution
-- 🎯 **Fixed allocation strategies** - Your 70/25/5, 50/30/20, 25/25/50 ratios
-- 🔄 **Dual compatibility** - Same logic serves both conversational and API needs
-- 📊 **Real-time data** - Always use fresh market data
-- 🛡️ **Conservative bias** - Default to safer recommendations
+- 🔒 **Sepolia Testnet Only** - Focus on single chain for MVP
+- 💰 **Gas Efficiency** - Minimize gas costs through optimal routing
+- 🛡️ **Slippage Protection** - Maximum 0.5% slippage tolerance
+- 🔄 **Error Recovery** - Graceful handling of failed swaps
+- 📊 **Real-time Data** - Always use fresh market data for decisions
 
-## 🔍 **Files to Modify (Not Replace)**
+## 🔍 **Files to Create/Modify**
 
-### **Enhance These:**
-- ✅ `src/actions/analyzeYieldAction.ts` - Add dual-mode responses
-- ✅ `src/actions/optimizePortfolioAction.ts` - Add fixed strategies
-- ✅ `src/actions/riskAssessmentAction.ts` - Add structured risk data
-- ✅ `src/routes/index.ts` - Add API endpoints
-- ✅ `src/plugin.ts` - Register enhanced actions
+### **New Core Services:**
+- ✅ `src/services/dexAggregatorService.ts` - DEX integration and swap execution
+- ✅ `src/services/walletService.ts` - Secure wallet management
+- ✅ `src/services/marketAnalysisService.ts` - DeFiLlama integration
+- ✅ `src/types/swapInterfaces.ts` - Swap-related type definitions
 
-### **Create New:**
-- ✅ `src/utils/requestDetection.ts` - Request type detection
-- ✅ `src/utils/responseFormatters.ts` - Response formatting
-- ✅ `src/types/interfaces.ts` - Shared type definitions
+### **Enhanced Existing:**
+- ✅ `src/actions/analyzeYieldAction.ts` - Add swap execution capability
+- ✅ `src/routes/index.ts` - Add backend integration endpoints
+- ✅ `src/utils/requestDetection.ts` - Enhanced parameter extraction
+- ✅ `src/utils/responseFormatters.ts` - Swap result formatting
 
-### **Simplify (Don't Delete):**
-- 🔧 `src/services/yieldOptimizationService.ts` - Remove monitoring loops
-- 🔧 `src/actions/calculateILAction.ts` - Basic IL education only
-- 🔧 `src/actions/historicalAnalysisAction.ts` - Simple performance queries
+### **Configuration:**
+- ✅ `src/config/sepolia.ts` - Sepolia testnet configuration
+- ✅ `.env.example` - Required environment variables
 
-## 🎪 **Agent Personality (Keep Enhanced)**
+## 🎪 **Agent Personality (Enhanced)**
 
-**Alioth remains**:
-- 💬 **Conversational** - Natural, helpful responses for users  
-- 🤖 **API-Ready** - Structured data for backend integration
-- 📊 **Data-Driven** - Real-time market analysis
-- 🛡️ **Risk-Aware** - Conservative bias with clear risk warnings
-- 🎯 **Strategy-Focused** - Your fixed allocation strategies as foundation
+**Alioth AI Agent now**:
+- 🔄 **Swap-Capable** - Actually executes optimal token swaps
+- 💡 **Market-Intelligent** - Uses real DeFiLlama data for decisions  
+- 🎯 **Strategy-Focused** - Applies risk-based allocation strategies
+- 🛡️ **Security-First** - Validates all swaps and protects against slippage
+- 🤖 **Backend-Ready** - Provides structured data for contract execution
+- 💬 **User-Friendly** - Still maintains conversational mode for direct users
 
-**The agent serves both masters**: human users who want conversation AND backend systems that need structured data, using the same intelligent core for both. 
+**The agent now handles the complete optimization flow**: market analysis → swap execution → ready-to-deposit strategy, serving as the intelligent swap orchestrator for the Alioth ecosystem. 

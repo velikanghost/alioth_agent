@@ -22,7 +22,7 @@ export const routes: Route[] = [
         const request: YieldAnalysisRequest = req.body
 
         // Validate request
-        if (!request.inputToken || !request.inputAmount) {
+        if (!request.inputTokenAddress || !request.usdAmount) {
           return res.status(400).json({
             success: false,
             error: 'inputToken and inputAmount are required',
@@ -34,8 +34,8 @@ export const routes: Route[] = [
         const message = {
           content: {
             structured: true,
-            inputToken: request.inputToken,
-            inputAmount: request.inputAmount,
+            inputTokenAddress: request.inputTokenAddress,
+            usdAmount: request.usdAmount,
             riskTolerance: request.riskTolerance || 'moderate',
             userAddress: request.userAddress,
           },

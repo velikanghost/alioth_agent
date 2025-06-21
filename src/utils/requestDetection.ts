@@ -67,7 +67,14 @@ export const extractInputToken = (message: Memory): string => {
  * Extracts input amount from both API and conversational requests
  */
 export const extractInputAmount = (message: Memory): string => {
-  // Handle direct API parameters
+  // Handle new API format with usdAmount
+  if (
+    message.content.usdAmount &&
+    typeof message.content.usdAmount === 'number'
+  )
+    return message.content.usdAmount.toString()
+
+  // Handle direct API parameters (old format)
   if (
     message.content.inputAmount &&
     typeof message.content.inputAmount === 'string'
