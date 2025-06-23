@@ -38,8 +38,13 @@
     "@uniswap/v3-core": "^1.0.1",
     "@uniswap/v3-periphery": "^1.4.4",
     "@uniswap/v3-sdk": "^3.25.2",
+    "@aave/contract-helpers": "^1.35.0",
+    "@aave/math-utils": "^1.35.0",
+    "@bgd-labs/aave-address-book": "^4.22.3",
     "axios": "^1.10.0",
     "bignumber.js": "^9.1.2",
+    "dayjs": "^1.11.13",
+    "ethers": "^5.7.2",
     "viem": "^2.0.0",
     "zod": "3.24.2"
   },

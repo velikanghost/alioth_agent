@@ -15,9 +15,9 @@ import {
 } from '../utils/requestDetection.js'
 import type { ProtocolAllocation, MarketData } from '../types/interfaces.js'
 
-// Supported tokens and protocols
-const SUPPORTED_TOKENS = ['AAVE', 'LINK', 'ETH', 'WETH', 'WBTC']
-const SUPPORTED_PROTOCOLS = ['aave', 'compound-v3']
+// Supported tokens and protocols - Available on Aave testnets
+const SUPPORTED_TOKENS = ['LINK', 'WBTC', 'WETH', 'ETH', 'AAVE', 'GHO', 'EURS']
+const SUPPORTED_PROTOCOLS = ['aave'] // Only Aave for testnet
 
 /**
  * Extract input token address from message
@@ -165,25 +165,11 @@ const findBestYieldForToken = async (params: {
     `Finding best yield for ${tokenAmount} ${tokenSymbol} (~$${usdAmount}) with ${riskTolerance} risk tolerance`,
   )
 
-  // Get yield opportunities for this specific token across all protocols
-  const [allProtocols, topYields] = await Promise.all([
+  // Get yield opportunities for this specific token from Aave contracts
+  const [allProtocols, tokenYields] = await Promise.all([
     defiDataService.getProtocols(),
-    defiDataService.getTopYieldOpportunities(20, 100_000),
+    defiDataService.getTokenYieldOpportunities(tokenSymbol),
   ])
-
-  // Filter for supported protocols and the specific token
-  const tokenYields = topYields.filter((pool) => {
-    const isSupprotedProtocol = SUPPORTED_PROTOCOLS.some((protocol) =>
-      pool.project?.toLowerCase().includes(protocol.replace('-v3', '')),
-    )
-
-    const matchesToken =
-      pool.symbol?.toUpperCase().includes(tokenSymbol.toUpperCase()) ||
-      (tokenSymbol === 'ETH' && pool.symbol?.toUpperCase().includes('WETH')) ||
-      (tokenSymbol === 'WETH' && pool.symbol?.toUpperCase().includes('ETH'))
-
-    return isSupprotedProtocol && matchesToken
-  })
 
   // Sort by APY descending
   const sortedYields = tokenYields.sort((a, b) => (b.apy || 0) - (a.apy || 0))
@@ -194,91 +180,96 @@ const findBestYieldForToken = async (params: {
 
   if (sortedYields.length === 0) {
     throw new Error(
-      `No yield opportunities found for ${tokenSymbol} in supported protocols (Aave, Compound-v3)`,
+      `No yield opportunities found for ${tokenSymbol} in Aave testnets. Supported tokens: ${SUPPORTED_TOKENS.join(', ')}`,
     )
   }
 
-  // Risk-based allocation strategy
+  // Risk-based allocation strategy - Aave only for testnets
   if (riskTolerance === 'conservative') {
-    // Use top 1-2 most stable protocols, prefer Aave
-    const aavePool = sortedYields.find((p) =>
-      p.project?.toLowerCase().includes('aave'),
-    )
-    const compoundPool = sortedYields.find((p) =>
-      p.project?.toLowerCase().includes('compound'),
-    )
-
-    if (aavePool) {
-      recommendations.push({
-        protocol: 'aave',
-        percentage: compoundPool ? 70 : 100,
-        expectedAPY: aavePool.apy || 0,
-        riskScore: 2,
-        tvl: aavePool.tvlUsd || 0,
-        chain: aavePool.chain || 'ethereum',
-        token: tokenSymbol,
-        amount: compoundPool
-          ? (parseFloat(tokenAmount) * 0.7).toString()
-          : tokenAmount,
-      })
-    }
-
-    if (compoundPool && aavePool) {
-      recommendations.push({
-        protocol: 'compound-v3',
-        percentage: 30,
-        expectedAPY: compoundPool.apy || 0,
-        riskScore: 3,
-        tvl: compoundPool.tvlUsd || 0,
-        chain: compoundPool.chain || 'ethereum',
-        token: tokenSymbol,
-        amount: (parseFloat(tokenAmount) * 0.3).toString(),
-      })
-    }
-
-    reasoning = `Conservative strategy: Prioritizing Aave (${aavePool?.apy?.toFixed(2)}% APY) for ${aavePool ? '70%' : '100%'} allocation due to strong track record and security. ${compoundPool ? `Compound-v3 (${compoundPool.apy?.toFixed(2)}% APY) for remaining 30% to diversify protocol risk.` : ''}`
-  } else if (riskTolerance === 'moderate') {
-    // Balance between protocols, slightly favor higher yield
+    // Use highest and second highest APY chains for diversification
     const topTwo = sortedYields.slice(0, 2)
 
-    topTwo.forEach((pool, index) => {
-      const percentage = index === 0 ? 60 : 40
-      const protocol = pool.project?.toLowerCase().includes('aave')
-        ? 'aave'
-        : 'compound-v3'
-
-      recommendations.push({
-        protocol,
-        percentage,
-        expectedAPY: pool.apy || 0,
-        riskScore: protocol === 'aave' ? 3 : 4,
-        tvl: pool.tvlUsd || 0,
-        chain: pool.chain || 'ethereum',
-        token: tokenSymbol,
-        amount: ((parseFloat(tokenAmount) * percentage) / 100).toString(),
+    if (topTwo.length >= 2) {
+      // Split across top 2 chains: 70% highest, 30% second highest
+      topTwo.forEach((pool, index) => {
+        const percentage = index === 0 ? 70 : 30
+        recommendations.push({
+          protocol: 'aave',
+          percentage,
+          expectedAPY: pool.apy || 0,
+          riskScore: 2,
+          tvl: pool.tvlUsd || 0,
+          chain: pool.chain || 'sepolia',
+          token: tokenSymbol,
+          amount: ((parseFloat(tokenAmount) * percentage) / 100).toString(),
+        })
       })
-    })
+      reasoning = `Conservative strategy: Diversified across Aave V3 on ${topTwo[0]?.chain} (${topTwo[0]?.apy?.toFixed(2)}% APY, 70%) and ${topTwo[1]?.chain} (${topTwo[1]?.apy?.toFixed(2)}% APY, 30%) for risk reduction.`
+    } else {
+      // Single chain allocation
+      const bestPool = topTwo[0]
+      recommendations.push({
+        protocol: 'aave',
+        percentage: 100,
+        expectedAPY: bestPool.apy || 0,
+        riskScore: 2,
+        tvl: bestPool.tvlUsd || 0,
+        chain: bestPool.chain || 'sepolia',
+        token: tokenSymbol,
+        amount: tokenAmount,
+      })
+      reasoning = `Conservative strategy: Full allocation to Aave V3 on ${bestPool.chain} (${bestPool.apy?.toFixed(2)}% APY) - single available option.`
+    }
+  } else if (riskTolerance === 'moderate') {
+    // Balance between top chains, slightly favor higher yield
+    const topTwo = sortedYields.slice(0, 2)
 
-    reasoning = `Moderate strategy: Balanced allocation across top protocols. ${topTwo[0]?.project} (${topTwo[0]?.apy?.toFixed(2)}% APY) gets 60% for higher yield, ${topTwo[1]?.project} (${topTwo[1]?.apy?.toFixed(2)}% APY) gets 40% for diversification.`
+    if (topTwo.length >= 2) {
+      topTwo.forEach((pool, index) => {
+        const percentage = index === 0 ? 60 : 40
+        recommendations.push({
+          protocol: 'aave',
+          percentage,
+          expectedAPY: pool.apy || 0,
+          riskScore: 3,
+          tvl: pool.tvlUsd || 0,
+          chain: pool.chain || 'sepolia',
+          token: tokenSymbol,
+          amount: ((parseFloat(tokenAmount) * percentage) / 100).toString(),
+        })
+      })
+      reasoning = `Moderate strategy: Balanced allocation across Aave V3 networks. ${topTwo[0]?.chain} (${topTwo[0]?.apy?.toFixed(2)}% APY) gets 60% for higher yield, ${topTwo[1]?.chain} (${topTwo[1]?.apy?.toFixed(2)}% APY) gets 40% for diversification.`
+    } else {
+      // Single option available
+      const bestYield = topTwo[0]
+      recommendations.push({
+        protocol: 'aave',
+        percentage: 100,
+        expectedAPY: bestYield.apy || 0,
+        riskScore: 3,
+        tvl: bestYield.tvlUsd || 0,
+        chain: bestYield.chain || 'sepolia',
+        token: tokenSymbol,
+        amount: tokenAmount,
+      })
+      reasoning = `Moderate strategy: Full allocation to Aave V3 on ${bestYield.chain} (${bestYield.apy?.toFixed(2)}% APY) - single available option.`
+    }
   } else {
-    // Aggressive: Go for highest yield protocol
+    // Aggressive: Go for highest yield chain
     const bestYield = sortedYields[0]
-    const protocol = bestYield.project?.toLowerCase().includes('aave')
-      ? 'aave'
-      : 'compound-v3'
 
     recommendations.push({
-      protocol,
+      protocol: 'aave',
       percentage: 100,
       expectedAPY: bestYield.apy || 0,
       riskScore: 5,
       tvl: bestYield.tvlUsd || 0,
-      chain: bestYield.chain || 'ethereum',
+      chain: bestYield.chain || 'sepolia',
       token: tokenSymbol,
       amount: tokenAmount,
     })
 
-    reasoning = `Aggressive strategy: Full allocation to ${bestYield.project} (${bestYield.apy?.toFixed(2)}% APY) for maximum yield on ${tokenSymbol}.`
+    reasoning = `Aggressive strategy: Full allocation to Aave V3 on ${bestYield.chain} (${bestYield.apy?.toFixed(2)}% APY) for maximum yield on ${tokenSymbol}.`
   }
 
   // Calculate market analysis
