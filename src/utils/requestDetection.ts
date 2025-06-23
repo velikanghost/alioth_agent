@@ -64,6 +64,50 @@ export const extractInputToken = (message: Memory): string => {
 }
 
 /**
+ * Extracts output token from both API and conversational requests (for swaps)
+ */
+export const extractOutputToken = (message: Memory): string => {
+  // Handle direct API parameters
+  if (
+    message.content.outputToken &&
+    typeof message.content.outputToken === 'string'
+  )
+    return message.content.outputToken
+
+  // Handle JSON in text field
+  if (message.content.text && isValidJSON(message.content.text)) {
+    try {
+      const parsed = JSON.parse(message.content.text)
+      if (parsed.outputToken && typeof parsed.outputToken === 'string')
+        return parsed.outputToken
+    } catch {
+      // Continue to natural language extraction
+    }
+  }
+
+  // Extract from natural language
+  const text = message.content.text?.toLowerCase() || ''
+
+  // Look for "to TOKEN" or "for TOKEN" patterns
+  const toMatch = text.match(/(?:to|for|into)\s+(usdc|dai|usdt|eth|weth|wbtc)/i)
+  if (toMatch) return toMatch[1].toUpperCase()
+
+  // Look for arrow patterns like "USDC -> ETH"
+  const arrowMatch = text.match(
+    /(?:usdc|dai|usdt|eth|weth|wbtc)\s*->\s*(usdc|dai|usdt|eth|weth|wbtc)/i,
+  )
+  if (arrowMatch) return arrowMatch[1].toUpperCase()
+
+  // Look for "swap X for Y" patterns
+  const swapForMatch = text.match(
+    /swap\s+\w+\s+for\s+(usdc|dai|usdt|eth|weth|wbtc)/i,
+  )
+  if (swapForMatch) return swapForMatch[1].toUpperCase()
+
+  return 'ETH' // Default fallback
+}
+
+/**
  * Extracts input amount from both API and conversational requests
  */
 export const extractInputAmount = (message: Memory): string => {
@@ -196,34 +240,111 @@ export const extractProtocolName = (message: Memory): string => {
 }
 
 /**
- * Extracts user address from message if provided
+ * Extract wallet ID from message
+ */
+export const extractWalletId = (message: Memory): string | undefined => {
+  // Handle direct API parameters
+  if (
+    message.content.walletId &&
+    typeof message.content.walletId === 'string'
+  ) {
+    return message.content.walletId
+  }
+
+  // Handle JSON in text field
+  if (message.content.text && message.content.text.includes('walletId')) {
+    try {
+      const parsed = JSON.parse(message.content.text)
+      if (parsed.walletId && typeof parsed.walletId === 'string') {
+        return parsed.walletId
+      }
+    } catch {
+      // Continue to natural language extraction
+    }
+  }
+
+  // Extract from natural language
+  const text = message.content.text?.toLowerCase() || ''
+  const walletMatch = text.match(/wallet[:\s]+([a-zA-Z0-9_-]+)/i)
+  if (walletMatch) return walletMatch[1]
+
+  return undefined
+}
+
+/**
+ * Extract user address from message
  */
 export const extractUserAddress = (message: Memory): string | undefined => {
   // Handle direct API parameters
   if (
     message.content.userAddress &&
     typeof message.content.userAddress === 'string'
-  )
+  ) {
     return message.content.userAddress
+  }
+
+  // Handle JSON in text field
+  if (message.content.text && message.content.text.includes('userAddress')) {
+    try {
+      const parsed = JSON.parse(message.content.text)
+      if (parsed.userAddress && typeof parsed.userAddress === 'string') {
+        return parsed.userAddress
+      }
+    } catch {
+      // Continue to natural language extraction
+    }
+  }
+
+  // Extract from natural language (Ethereum address pattern)
+  const text = message.content.text || ''
+  const addressMatch = text.match(/(0x[a-fA-F0-9]{40})/i)
+  if (addressMatch) return addressMatch[1]
+
+  return undefined
+}
+
+/**
+ * Extracts slippage tolerance from message (in basis points)
+ */
+export const extractSlippageTolerance = (message: Memory): number => {
+  // Handle direct API parameters
+  if (
+    message.content.slippageTolerance &&
+    typeof message.content.slippageTolerance === 'number'
+  )
+    return message.content.slippageTolerance
 
   // Handle JSON in text field
   if (message.content.text && isValidJSON(message.content.text)) {
     try {
       const parsed = JSON.parse(message.content.text)
-      if (parsed.userAddress) return parsed.userAddress
+      if (
+        parsed.slippageTolerance &&
+        typeof parsed.slippageTolerance === 'number'
+      )
+        return parsed.slippageTolerance
     } catch {
-      // No user address found
+      // Continue to natural language extraction
     }
   }
 
-  // Look for Ethereum address in text (0x followed by 40 hex characters)
-  const text = message.content.text || ''
-  const addressMatch = text.match(/0x[a-fA-F0-9]{40}/)
-  if (addressMatch) {
-    return addressMatch[0]
+  // Extract from natural language
+  const text = message.content.text?.toLowerCase() || ''
+  const slippageMatch = text.match(/(\d+(?:\.\d+)?)\s*%?\s*slippage/i)
+  if (slippageMatch) {
+    const percentage = parseFloat(slippageMatch[1])
+    return Math.round(percentage * 100) // Convert to basis points
   }
 
-  return undefined
+  // Default based on risk tolerance
+  const riskTolerance = extractRiskTolerance(message)
+  const defaultSlippage = {
+    conservative: 50, // 0.5%
+    moderate: 100, // 1.0%
+    aggressive: 200, // 2.0%
+  }
+
+  return defaultSlippage[riskTolerance]
 }
 
 /**

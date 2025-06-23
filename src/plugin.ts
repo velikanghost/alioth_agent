@@ -18,18 +18,30 @@ import { routes } from './routes/index.js'
 // Import services
 import { YieldOptimizationService } from './services/index.js'
 
+// Import actions - Updated to remove swap-related actions
+import {
+  analyzeYieldAction,
+  optimizePortfolioAction,
+  historicalAnalysisAction,
+  calculateILAction,
+  riskAssessmentAction,
+  directDepositOptimizationAction,
+} from './actions/index.js'
+
 /**
- * Production-ready DeFi yield optimization plugin with unified response handling
+ * Simplified DeFi yield optimization plugin - Direct deposits only (no swaps)
  */
 const plugin: Plugin = {
   name: 'yield_optimizer',
   description:
-    'Production-ready DeFi yield optimization with unified response handling to prevent duplicates',
+    'Simplified DeFi yield optimization for direct token deposits without swap execution',
   priority: 2000,
   config: defaultConfig,
 
   async init(config: Record<string, string>) {
-    logger.info('*** Initializing Unified Yield Optimizer Plugin ***')
+    logger.info(
+      '*** Initializing Simplified Yield Optimizer Plugin (Direct Deposits Only) ***',
+    )
     try {
       const validatedConfig = await configSchema.parseAsync(config)
 
@@ -38,7 +50,7 @@ const plugin: Plugin = {
         if (value) process.env[key] = value
       }
 
-      logger.info('Unified yield optimizer plugin initialized successfully')
+      logger.info('Simplified yield optimizer plugin initialized successfully')
     } catch (error) {
       if (error instanceof z.ZodError) {
         throw new Error(
@@ -51,15 +63,32 @@ const plugin: Plugin = {
 
   routes: routes,
 
+  // Actions for yield analysis and direct deposit optimization (no swaps)
+  actions: [
+    analyzeYieldAction,
+    optimizePortfolioAction,
+    historicalAnalysisAction,
+    calculateILAction,
+    riskAssessmentAction,
+    directDepositOptimizationAction, // New main action for direct deposits
+  ],
+
   events: {
     MESSAGE_RECEIVED: [
       async (params) => {
-        logger.info('Processing unified yield optimization query')
+        logger.info(
+          'Processing yield optimization query (direct deposits only)',
+        )
       },
     ],
     YIELD_OPPORTUNITY_DETECTED: [
       async (params) => {
         logger.info('New yield opportunity detected')
+      },
+    ],
+    DEPOSIT_OPTIMIZED: [
+      async (params) => {
+        logger.info('Direct deposit optimization completed')
       },
     ],
   },

@@ -4,6 +4,7 @@ import { defiDataService } from '../services/dataService.js'
 import { analyzeYieldAction } from '../actions/analyzeYieldAction.js'
 import { optimizePortfolioAction } from '../actions/optimizePortfolioAction.js'
 import { riskAssessmentAction } from '../actions/riskAssessmentAction.js'
+import { directDepositOptimizationAction } from '../actions/directDepositOptimizationAction.js'
 import type {
   YieldAnalysisRequest,
   PortfolioOptimizationRequest,
@@ -11,6 +12,91 @@ import type {
 } from '../types/interfaces.js'
 
 export const routes: Route[] = [
+  // Direct deposit optimization endpoint (no swaps)
+  {
+    name: 'direct-deposit-optimization',
+    path: '/api/v1/direct-deposit-optimization',
+    type: 'POST',
+    handler: async (req: any, res: any) => {
+      try {
+        logger.info('API: Received direct deposit optimization request')
+        const request = req.body
+
+        // Validate request
+        if (
+          !request.inputTokenAddress ||
+          !request.inputTokenSymbol ||
+          !request.inputTokenAmount ||
+          !request.usdAmount
+        ) {
+          return res.status(400).json({
+            success: false,
+            error:
+              'inputTokenAddress, inputTokenSymbol, inputTokenAmount, and usdAmount are required',
+            timestamp: new Date().toISOString(),
+          })
+        }
+
+        // Create structured message for agent
+        const message = {
+          content: {
+            structured: true,
+            inputTokenAddress: request.inputTokenAddress,
+            inputTokenSymbol: request.inputTokenSymbol,
+            inputTokenAmount: request.inputTokenAmount,
+            usdAmount: request.usdAmount,
+            riskTolerance: request.riskTolerance || 'moderate',
+          },
+        }
+
+        // Call direct deposit optimization action
+        let result: any = null
+        const callback = async (response: any): Promise<any[]> => {
+          result = response
+          return []
+        }
+
+        await directDepositOptimizationAction.handler(
+          {} as any, // runtime placeholder
+          message as any,
+          {} as any, // state placeholder
+          {},
+          callback,
+        )
+
+        if (result?.content?.success) {
+          logger.info('API: Direct deposit optimization completed successfully')
+          res.json(result.content)
+        } else if (result?.content?.error) {
+          logger.error(
+            'API: Direct deposit optimization failed:',
+            result.content.error,
+          )
+          res.status(400).json({
+            success: false,
+            error: result.content.error,
+            timestamp: new Date().toISOString(),
+          })
+        } else {
+          logger.error('API: Unexpected response format')
+          res.status(500).json({
+            success: false,
+            error: 'Unexpected response format from optimization action',
+            timestamp: new Date().toISOString(),
+          })
+        }
+      } catch (error) {
+        logger.error('API: Error in direct deposit optimization:', error)
+        res.status(500).json({
+          success: false,
+          error: 'Internal server error',
+          message: error instanceof Error ? error.message : 'Unknown error',
+          timestamp: new Date().toISOString(),
+        })
+      }
+    },
+  },
+
   // New API endpoints for dual-mode functionality
   {
     name: 'yield-analysis-api',
