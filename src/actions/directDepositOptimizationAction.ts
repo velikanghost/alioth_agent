@@ -14,8 +14,17 @@ import {
 import type { ProtocolAllocation, MarketData } from '../types/interfaces.js'
 
 // Supported tokens and protocols - Available on Aave testnets
-const SUPPORTED_TOKENS = ['LINK', 'WBTC', 'WETH', 'ETH', 'AAVE', 'GHO', 'EURS']
-const SUPPORTED_PROTOCOLS = ['aave'] // Only Aave for testnet
+const SUPPORTED_TOKENS = [
+  'LINK',
+  'WBTC',
+  'WETH',
+  'ETH',
+  'AAVE',
+  'GHO',
+  'EURS',
+  'USDC',
+]
+const SUPPORTED_PROTOCOLS = ['aave', 'compound-v3'] // Now supports Compound V3
 
 /**
  * Extract input token address from message
@@ -192,7 +201,7 @@ const findBestYieldForToken = async (params: {
       topTwo.forEach((pool, index) => {
         const percentage = index === 0 ? 70 : 30
         recommendations.push({
-          protocol: 'aave',
+          protocol: pool.project || 'unknown',
           percentage,
           expectedAPY: pool.apy || 0,
           riskScore: 2,
@@ -207,7 +216,7 @@ const findBestYieldForToken = async (params: {
       // Single chain allocation
       const bestPool = topTwo[0]
       recommendations.push({
-        protocol: 'aave',
+        protocol: bestPool.project || 'unknown',
         percentage: 100,
         expectedAPY: bestPool.apy || 0,
         riskScore: 2,
@@ -226,7 +235,7 @@ const findBestYieldForToken = async (params: {
       topTwo.forEach((pool, index) => {
         const percentage = index === 0 ? 60 : 40
         recommendations.push({
-          protocol: 'aave',
+          protocol: pool.project || 'unknown',
           percentage,
           expectedAPY: pool.apy || 0,
           riskScore: 3,
@@ -241,7 +250,7 @@ const findBestYieldForToken = async (params: {
       // Single option available
       const bestYield = topTwo[0]
       recommendations.push({
-        protocol: 'aave',
+        protocol: bestYield.project || 'unknown',
         percentage: 100,
         expectedAPY: bestYield.apy || 0,
         riskScore: 3,
@@ -257,7 +266,7 @@ const findBestYieldForToken = async (params: {
     const bestYield = sortedYields[0]
 
     recommendations.push({
-      protocol: 'aave',
+      protocol: bestYield.project || 'unknown',
       percentage: 100,
       expectedAPY: bestYield.apy || 0,
       riskScore: 5,

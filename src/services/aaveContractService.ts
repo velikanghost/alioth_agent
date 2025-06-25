@@ -364,6 +364,11 @@ class AaveContractService {
     tokenSymbol: string,
     limit: number = 5,
   ): Promise<AaveReserveData[]> {
+    // Aave testnets do NOT support USDC as a supply asset. Return early.
+    if (tokenSymbol.toUpperCase() === 'USDC') {
+      logger.info('USDC supply not available on Aave testnets – skipping')
+      return []
+    }
     const tokenReserves = await this.getTokenReserves(tokenSymbol)
 
     return tokenReserves

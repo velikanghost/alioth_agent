@@ -1,6 +1,7 @@
 import axios from 'axios'
 import { logger } from '@elizaos/core'
 import { aaveContractService } from './aaveContractService.js'
+import { compoundContractService } from './compoundContractService.js'
 
 export interface ProtocolData {
   name: string
@@ -690,21 +691,38 @@ export class DeFiDataService {
    */
   async getTokenYieldOpportunities(tokenSymbol: string): Promise<PoolData[]> {
     try {
-      // Get Aave opportunities from contracts - our only source
-      const aaveOpportunities = await aaveContractService.getTopYieldsForToken(
+      // Fetch from Aave contracts
+      const aavePromise =
+        tokenSymbol.toUpperCase() === 'USDC'
+          ? Promise.resolve([])
+          : aaveContractService.getTopYieldsForToken(tokenSymbol, 10)
+
+      // Fetch from Compound contracts (only returns data for USDC)
+      const compoundPromise = compoundContractService.getTopYieldsForToken(
         tokenSymbol,
         10,
       )
+
+      const [aaveOpportunities, compoundOpportunities] = await Promise.all([
+        aavePromise,
+        compoundPromise,
+      ])
+
       const aaveData =
         aaveContractService.convertToLegacyFormat(aaveOpportunities)
+      const compoundData = compoundContractService.convertToLegacyFormat(
+        compoundOpportunities,
+      )
+
+      const combined = [...aaveData, ...compoundData]
 
       // Filter and sort
-      const validOpportunities = aaveData
+      const validOpportunities = combined
         .filter((pool) => pool.apy && pool.apy > 0)
         .sort((a, b) => (b.apy || 0) - (a.apy || 0))
 
       logger.info(
-        `Found ${validOpportunities.length} yield opportunities for ${tokenSymbol} from Aave contracts`,
+        `Found ${validOpportunities.length} yield opportunities for ${tokenSymbol} across protocols`,
       )
       return validOpportunities
     } catch (error) {
@@ -721,21 +739,29 @@ export class DeFiDataService {
    */
   async getStablecoinYields(): Promise<PoolData[]> {
     try {
-      // Get Aave stablecoin data from contracts - only available stablecoins
-      const stablecoinSymbols = ['GHO', 'EURS'] // Only stablecoins available on Aave testnets
-      const aaveStablecoins: PoolData[] = []
+      // Supported stablecoins
+      const stablecoinSymbols = ['USDC', 'GHO', 'EURS']
+      const pools: PoolData[] = []
 
       for (const symbol of stablecoinSymbols) {
-        const reserves = await aaveContractService.getTopYieldsForToken(
-          symbol,
-          5,
+        // Aave – skip USDC because it is not supply-enabled there
+        if (symbol !== 'USDC') {
+          const aaveReserves = await aaveContractService.getTopYieldsForToken(
+            symbol,
+            5,
+          )
+          pools.push(...aaveContractService.convertToLegacyFormat(aaveReserves))
+        }
+
+        // Compound (only USDC returns data)
+        const compoundReserves =
+          await compoundContractService.getTopYieldsForToken(symbol, 5)
+        pools.push(
+          ...compoundContractService.convertToLegacyFormat(compoundReserves),
         )
-        const converted = aaveContractService.convertToLegacyFormat(reserves)
-        aaveStablecoins.push(...converted)
       }
 
-      // Filter and sort by APY
-      return aaveStablecoins
+      return pools
         .filter((pool) => pool.apy && pool.apy > 0)
         .sort((a, b) => (b.apy || 0) - (a.apy || 0))
     } catch (error) {
