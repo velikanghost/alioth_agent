@@ -1,6 +1,5 @@
 import type {
   Action,
-  Content,
   HandlerCallback,
   IAgentRuntime,
   Memory,
@@ -8,7 +7,6 @@ import type {
 } from '@elizaos/core'
 import { logger } from '@elizaos/core'
 import { defiDataService } from '../services/dataService.js'
-import { getTokenBySymbol } from '../config/uniswap.js'
 import {
   detectRequestType,
   extractRiskTolerance,

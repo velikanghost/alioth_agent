@@ -1,29 +1,17 @@
 import type { Plugin } from '@elizaos/core'
 import { logger } from '@elizaos/core'
 import { z } from 'zod'
-
-// Import configuration
 import { configSchema, defaultConfig } from './config/schema.js'
-
-// Import providers
 import {
   investmentAllocationProvider,
   protocolMonitorProvider,
   defiAnalysisProvider,
 } from './providers/index.js'
-
-// Import routes
 import { routes } from './routes/index.js'
-
-// Import services
 import { YieldOptimizationService } from './services/index.js'
-
-// Import actions - Updated to remove swap-related actions
 import {
   analyzeYieldAction,
   optimizePortfolioAction,
-  historicalAnalysisAction,
-  calculateILAction,
   riskAssessmentAction,
   directDepositOptimizationAction,
 } from './actions/index.js'
@@ -67,10 +55,8 @@ const plugin: Plugin = {
   actions: [
     analyzeYieldAction,
     optimizePortfolioAction,
-    historicalAnalysisAction,
-    calculateILAction,
     riskAssessmentAction,
-    directDepositOptimizationAction, // New main action for direct deposits
+    directDepositOptimizationAction,
   ],
 
   events: {
