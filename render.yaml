@@ -1,0 +1,43 @@
+services:
+  - type: web
+    name: alioth-agent
+    env: bun
+    plan: free
+    buildCommand: |
+      bun install --frozen-lockfile
+      bun run build
+    startCommand: bun run start
+    autoDeploy: true
+    envVars:
+      - key: SEPLOLIA_RPC_URL
+        sync: false
+      - key: BASE_SEPOLIA_RPC_URL
+        sync: false
+      - key: SEPOLIA_COMPOUND_COMET
+        sync: false
+      - key: BASE_SEPOLIA_COMPOUND_COMET
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: POSTGRES_URL
+        sync: false
+      - key: COINGECKO_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        sync: false
+      - key: EMBEDDING_MODEL
+        sync: false
+      - key: ENABLE_MOCK_FALLBACK
+        sync: false
+      - key: DEBUG_MODE
+        sync: false
+      - key: LOG_LEVEL
+        sync: false
+      - key: BACKEND_URL
+        sync: false
+      - key: BACKEND_API_KEY
+        sync: false
+      - key: PRIVY_APP_ID
+        sync: false
+      - key: PRIVY_APP_SECRET
+        sync: false
