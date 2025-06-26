@@ -51,7 +51,7 @@
     "@vitest/coverage-v8": "3.1.4"
   },
   "scripts": {
-    "start": "NODE_OPTIONS=--loader ts-node/esm elizaos start --port $PORT",
+    "start": "NODE_OPTIONS='--loader ts-node/esm' elizaos start --port $PORT",
     "dev": "elizaos dev --port 3001",
     "build": "tsup",
     "lint": "prettier --write ./src",
