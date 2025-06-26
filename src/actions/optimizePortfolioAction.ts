@@ -8,15 +8,132 @@ import type {
 } from '@elizaos/core'
 import { logger } from '@elizaos/core'
 import { defiDataService } from '../services/dataService.js'
+import {
+  detectRequestType,
+  extractRiskTolerance,
+} from '../utils/requestDetection.js'
+import { formatPortfolioResponse } from '../utils/responseFormatters.js'
+import type {
+  AllocationStrategy,
+  DetailedAllocation,
+  ProtocolAllocation,
+  MarketData,
+  EnhancedContent,
+} from '../types/interfaces.js'
+
+// Fixed allocation strategies as specified in focus document
+const ALLOCATION_STRATEGIES: Record<string, AllocationStrategy> = {
+  conservative: {
+    stablecoins: 70,
+    bluechip: 25,
+    riskAssets: 5,
+    description: 'Capital preservation focused, stable yields',
+    targetAPY: '4-6%',
+  },
+  moderate: {
+    stablecoins: 50,
+    bluechip: 30,
+    riskAssets: 20,
+    description: 'Balanced risk-reward, diversified approach',
+    targetAPY: '6-10%',
+  },
+  aggressive: {
+    stablecoins: 25,
+    bluechip: 25,
+    riskAssets: 50,
+    description: 'Growth focused, higher risk tolerance',
+    targetAPY: '10-15%+',
+  },
+}
 
 /**
- * Portfolio Optimization Action - Now with real market data
+ * Calculate detailed protocol allocations within each category
+ */
+const calculateDetailedAllocation = async (
+  baseStrategy: AllocationStrategy,
+  marketData: MarketData,
+): Promise<DetailedAllocation> => {
+  // Get current protocol data
+  const [stableYields, topYields] = await Promise.all([
+    defiDataService.getStablecoinYields(),
+    defiDataService.getTopYieldOpportunities(10, 1_000_000),
+  ])
+
+  // Stablecoin allocations (conservative protocols)
+  const stableProtocols = stableYields.slice(0, 3)
+  const stablecoins: ProtocolAllocation[] = stableProtocols.map(
+    (pool, index) => ({
+      protocol: pool.project || 'Unknown',
+      percentage: baseStrategy.stablecoins * (index === 0 ? 0.5 : 0.25),
+      expectedAPY: pool.apy || 4,
+      riskScore: 2 + index, // Very low risk
+      tvl: pool.tvlUsd || 0,
+      chain: pool.chain || 'ethereum',
+      token: pool.symbol || 'USDC',
+    }),
+  )
+
+  // Blue-chip allocations (established DeFi)
+  const bluechipProtocols = ['ETH staking', 'Aave', 'Compound']
+  const bluechip: ProtocolAllocation[] = bluechipProtocols.map(
+    (protocol, index) => ({
+      protocol,
+      percentage: baseStrategy.bluechip / bluechipProtocols.length,
+      expectedAPY: protocol === 'ETH staking' ? 3.5 : 5 + index,
+      riskScore: 3 + index,
+      tvl: 1_000_000_000, // Placeholder
+      chain: 'ethereum',
+      token: protocol === 'ETH staking' ? 'ETH' : 'Various',
+    }),
+  )
+
+  // Risk asset allocations (higher yield opportunities)
+  const riskProtocols = topYields
+    .filter((pool) => (pool.apy || 0) > 8)
+    .slice(0, 3)
+  const riskAssets: ProtocolAllocation[] = riskProtocols.map((pool, index) => ({
+    protocol: pool.project || 'Unknown',
+    percentage: baseStrategy.riskAssets * (index === 0 ? 0.4 : 0.3),
+    expectedAPY: pool.apy || 12,
+    riskScore: 6 + index,
+    tvl: pool.tvlUsd || 0,
+    chain: pool.chain || 'ethereum',
+    token: pool.symbol || 'Various',
+  }))
+
+  return { stablecoins, bluechip, riskAssets }
+}
+
+/**
+ * Calculate expected APY for the allocation
+ */
+const calculateExpectedAPY = (allocation: DetailedAllocation): number => {
+  const allAllocations = [
+    ...allocation.stablecoins,
+    ...allocation.bluechip,
+    ...allocation.riskAssets,
+  ]
+
+  const totalPercentage = allAllocations.reduce(
+    (sum, alloc) => sum + alloc.percentage,
+    0,
+  )
+  const weightedAPY = allAllocations.reduce(
+    (sum, alloc) => sum + alloc.expectedAPY * alloc.percentage,
+    0,
+  )
+
+  return totalPercentage > 0 ? weightedAPY / totalPercentage : 0
+}
+
+/**
+ * Portfolio Optimization Action - Enhanced with fixed strategies
  */
 export const optimizePortfolioAction: Action = {
   name: 'OPTIMIZE_PORTFOLIO',
   similes: ['REBALANCE', 'ALLOCATE', 'OPTIMIZE_ALLOCATION', 'PORTFOLIO_ADVICE'],
   description:
-    'Provides portfolio optimization recommendations based on current market conditions',
+    'Dual-mode portfolio optimization with fixed allocation strategies',
 
   validate: async (
     runtime: IAgentRuntime,
@@ -25,52 +142,25 @@ export const optimizePortfolioAction: Action = {
   ): Promise<boolean> => {
     const text = message.content.text?.toLowerCase() || ''
 
-    // Don't interfere with specific protocol queries - let ANALYZE_YIELD handle those
-    const isSpecificProtocolQuery =
-      text.includes('aave') ||
-      text.includes('compound') ||
-      text.includes('uniswap') ||
-      text.includes('curve') ||
-      text.includes('best token') ||
-      text.includes('which token')
-
-    if (isSpecificProtocolQuery) {
-      return false
-    }
-
-    // Enhanced validation to catch investment queries too
-    const isPortfolioQuery =
+    // Keep existing natural language validation for chat
+    const isConversational =
       text.includes('portfolio') ||
       text.includes('allocat') ||
       text.includes('rebalance') ||
-      text.includes('diversif')
-    const isStrategyQuery =
-      text.includes('strategy') &&
-      (text.includes('yield') ||
-        text.includes('defi') ||
-        text.includes('invest'))
-    const isOptimizeQuery =
-      text.includes('optimize') &&
-      (text.includes('yield') ||
-        text.includes('defi') ||
-        text.includes('portfolio'))
-    const isInvestmentQuery =
-      text.includes('invest') &&
-      (text.includes('yield') ||
-        text.includes('defi') ||
-        text.includes('strategy'))
+      text.includes('diversif') ||
+      text.includes('strategy') ||
+      text.includes('optimize') ||
+      text.includes('invest')
 
-    const shouldTrigger =
-      isPortfolioQuery ||
-      isStrategyQuery ||
-      isOptimizeQuery ||
-      isInvestmentQuery
+    // Add API request detection with proper type checking
+    const isAPIRequest =
+      message.content.structured === true ||
+      (typeof message.content.riskTolerance === 'string' &&
+        ['conservative', 'moderate', 'aggressive'].includes(
+          message.content.riskTolerance,
+        ))
 
-    logger.info(
-      `OPTIMIZE_PORTFOLIO validation: portfolio=${isPortfolioQuery}, strategy=${isStrategyQuery}, optimize=${isOptimizeQuery}, investment=${isInvestmentQuery}, shouldTrigger=${shouldTrigger}`,
-    )
-
-    return shouldTrigger
+    return isConversational || isAPIRequest
   },
 
   handler: async (
@@ -79,10 +169,13 @@ export const optimizePortfolioAction: Action = {
     state: State,
     options: any,
     callback: HandlerCallback,
-    responses: Memory[],
   ) => {
     try {
       logger.info('Optimizing portfolio with real market data')
+
+      // Detect if this is an API request
+      const isAPIRequest = detectRequestType(message) === 'api'
+      const riskTolerance = extractRiskTolerance(message)
 
       // Get current market data
       const [topYields, stableYields] = await Promise.all([
@@ -132,6 +225,70 @@ export const optimizePortfolioAction: Action = {
       // Get top protocols for recommendations
       const topStableProtocols = stableYields.slice(0, 2).map((p) => p.project)
       const topYieldProtocols = topYields.slice(0, 2).map((p) => p.project)
+
+      // Return structured data for API requests
+      if (isAPIRequest) {
+        const selectedStrategy = allocations[riskTolerance]
+        const protocols = [
+          ...stableYields.slice(0, 2).map((p) => ({
+            protocol: p.project || 'Unknown',
+            percentage: selectedStrategy.stablecoins / 2,
+            expectedAPY: p.apy || 4,
+            riskScore: 2,
+            category: 'stablecoins',
+            chain: p.chain || 'ethereum',
+            token: p.symbol || 'USDC',
+          })),
+          {
+            protocol: 'ETH Staking',
+            percentage: selectedStrategy.bluechip,
+            expectedAPY: 3.5,
+            riskScore: 3,
+            category: 'bluechip',
+            chain: 'ethereum',
+            token: 'ETH',
+          },
+          ...topYields.slice(0, 1).map((p) => ({
+            protocol: p.project || 'Unknown',
+            percentage: selectedStrategy.riskAssets,
+            expectedAPY: p.apy || 12,
+            riskScore: 6,
+            category: 'riskAssets',
+            chain: p.chain || 'ethereum',
+            token: p.symbol || 'Various',
+          })),
+        ]
+
+        const structuredResponse = {
+          success: true,
+          data: {
+            allocation: {
+              stablecoins: selectedStrategy.stablecoins,
+              bluechip: selectedStrategy.bluechip,
+              riskAssets: selectedStrategy.riskAssets,
+            },
+            expectedAPY: selectedStrategy.expectedAPY,
+            protocols,
+            confidence: 85,
+            reasoning: `${riskTolerance} allocation based on current market conditions`,
+            marketData: {
+              avgStableYield,
+              avgHighYield,
+              totalProtocols: topYields.length + stableYields.length,
+            },
+          },
+          timestamp: new Date().toISOString(),
+        }
+
+        const responseContent: Content = {
+          text: JSON.stringify(structuredResponse, null, 2),
+          actions: ['OPTIMIZE_PORTFOLIO'],
+          source: message.content.source,
+        }
+
+        await callback(responseContent)
+        return responseContent
+      }
 
       const strategyBreakdown = Object.entries(allocations)
         .map(

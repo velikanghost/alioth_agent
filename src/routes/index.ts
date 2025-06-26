@@ -1,8 +1,275 @@
 import type { Route } from '@elizaos/core'
 import { logger } from '@elizaos/core'
 import { defiDataService } from '../services/dataService.js'
+import { analyzeYieldAction } from '../actions/analyzeYieldAction.js'
+import { optimizePortfolioAction } from '../actions/optimizePortfolioAction.js'
+import { riskAssessmentAction } from '../actions/riskAssessmentAction.js'
+import { directDepositOptimizationAction } from '../actions/directDepositOptimizationAction.js'
+import type {
+  YieldAnalysisRequest,
+  PortfolioOptimizationRequest,
+  RiskAnalysisRequest,
+} from '../types/interfaces.js'
 
 export const routes: Route[] = [
+  // Direct deposit optimization endpoint (no swaps)
+  {
+    name: 'direct-deposit-optimization',
+    path: '/api/v1/direct-deposit-optimization',
+    type: 'POST',
+    handler: async (req: any, res: any) => {
+      try {
+        logger.info('API: Received direct deposit optimization request')
+        const request = req.body
+
+        // Validate request
+        if (
+          !request.inputTokenAddress ||
+          !request.inputTokenSymbol ||
+          !request.inputTokenAmount ||
+          !request.usdAmount
+        ) {
+          return res.status(400).json({
+            success: false,
+            error:
+              'inputTokenAddress, inputTokenSymbol, inputTokenAmount, and usdAmount are required',
+            timestamp: new Date().toISOString(),
+          })
+        }
+
+        // Create structured message for agent
+        const message = {
+          content: {
+            structured: true,
+            inputTokenAddress: request.inputTokenAddress,
+            inputTokenSymbol: request.inputTokenSymbol,
+            inputTokenAmount: request.inputTokenAmount,
+            usdAmount: request.usdAmount,
+            riskTolerance: request.riskTolerance || 'moderate',
+          },
+        }
+
+        // Call direct deposit optimization action
+        let result: any = null
+        const callback = async (response: any): Promise<any[]> => {
+          result = response
+          return []
+        }
+
+        await directDepositOptimizationAction.handler(
+          {} as any, // runtime placeholder
+          message as any,
+          {} as any, // state placeholder
+          {},
+          callback,
+        )
+
+        if (result?.content?.success) {
+          logger.info('API: Direct deposit optimization completed successfully')
+          res.json(result.content)
+        } else if (result?.content?.error) {
+          logger.error(
+            'API: Direct deposit optimization failed:',
+            result.content.error,
+          )
+          res.status(400).json({
+            success: false,
+            error: result.content.error,
+            timestamp: new Date().toISOString(),
+          })
+        } else {
+          logger.error('API: Unexpected response format')
+          res.status(500).json({
+            success: false,
+            error: 'Unexpected response format from optimization action',
+            timestamp: new Date().toISOString(),
+          })
+        }
+      } catch (error) {
+        logger.error('API: Error in direct deposit optimization:', error)
+        res.status(500).json({
+          success: false,
+          error: 'Internal server error',
+          message: error instanceof Error ? error.message : 'Unknown error',
+          timestamp: new Date().toISOString(),
+        })
+      }
+    },
+  },
+
+  // New API endpoints for dual-mode functionality
+  {
+    name: 'yield-analysis-api',
+    path: '/api/v1/yield-analysis',
+    type: 'POST',
+    handler: async (req: any, res: any) => {
+      try {
+        logger.info('API: Received yield analysis request')
+        const request: YieldAnalysisRequest = req.body
+
+        // Validate request
+        if (!request.inputTokenAddress || !request.usdAmount) {
+          return res.status(400).json({
+            success: false,
+            error: 'inputToken and inputAmount are required',
+            timestamp: new Date().toISOString(),
+          })
+        }
+
+        // Create structured message for agent
+        const message = {
+          content: {
+            structured: true,
+            inputTokenAddress: request.inputTokenAddress,
+            usdAmount: request.usdAmount,
+            riskTolerance: request.riskTolerance || 'moderate',
+            userAddress: request.userAddress,
+          },
+        }
+
+        // Call existing analyzeYieldAction
+        const result = await analyzeYieldAction.handler(
+          {} as any, // runtime placeholder
+          message as any,
+          {} as any, // state placeholder
+          {},
+          async () => [], // proper callback that returns empty Memory array
+        )
+
+        logger.info(
+          `API: Yield analysis completed with ${(result as any)?.allocation?.length || 0} allocations`,
+        )
+        res.json({
+          success: true,
+          data: result,
+          timestamp: new Date().toISOString(),
+        })
+      } catch (error) {
+        logger.error('API: Yield analysis error:', error)
+        res.status(500).json({
+          success: false,
+          error:
+            error instanceof Error ? error.message : 'Internal server error',
+          timestamp: new Date().toISOString(),
+        })
+      }
+    },
+  },
+
+  {
+    name: 'portfolio-optimization-api',
+    path: '/api/v1/portfolio-optimization',
+    type: 'POST',
+    handler: async (req: any, res: any) => {
+      try {
+        logger.info('API: Received portfolio optimization request')
+        const request: PortfolioOptimizationRequest = req.body
+
+        // Create structured message for agent
+        const message = {
+          content: {
+            structured: true,
+            riskTolerance: request.riskTolerance || 'moderate',
+            userAddress: request.userAddress,
+          },
+        }
+
+        // Call existing optimizePortfolioAction
+        const result = await optimizePortfolioAction.handler(
+          {} as any, // runtime placeholder
+          message as any,
+          {} as any, // state placeholder
+          {},
+          async () => [], // proper callback that returns empty Memory array
+        )
+
+        logger.info(
+          `API: Portfolio optimization completed for ${request.riskTolerance} strategy`,
+        )
+        res.json({
+          success: true,
+          data: result,
+          timestamp: new Date().toISOString(),
+        })
+      } catch (error) {
+        logger.error('API: Portfolio optimization error:', error)
+        res.status(500).json({
+          success: false,
+          error:
+            error instanceof Error ? error.message : 'Internal server error',
+          timestamp: new Date().toISOString(),
+        })
+      }
+    },
+  },
+
+  {
+    name: 'risk-analysis-api',
+    path: '/api/v1/risk-analysis',
+    type: 'POST',
+    handler: async (req: any, res: any) => {
+      try {
+        logger.info('API: Received risk analysis request')
+        const request: RiskAnalysisRequest = req.body
+
+        // Create structured message for agent
+        const message = {
+          content: {
+            structured: true,
+            protocol: request.protocol,
+            allocation: request.allocation,
+          },
+        }
+
+        // Call existing riskAssessmentAction
+        const result = await riskAssessmentAction.handler(
+          {} as any, // runtime placeholder
+          message as any,
+          {} as any, // state placeholder
+          {},
+          async () => [], // proper callback that returns empty Memory array
+        )
+
+        logger.info(
+          `API: Risk analysis completed for ${request.protocol || 'portfolio'}`,
+        )
+        res.json({
+          success: true,
+          data: result,
+          timestamp: new Date().toISOString(),
+        })
+      } catch (error) {
+        logger.error('API: Risk analysis error:', error)
+        res.status(500).json({
+          success: false,
+          error:
+            error instanceof Error ? error.message : 'Internal server error',
+          timestamp: new Date().toISOString(),
+        })
+      }
+    },
+  },
+
+  {
+    name: 'api-health',
+    path: '/api/v1/health',
+    type: 'GET',
+    handler: async (req: any, res: any) => {
+      res.json({
+        success: true,
+        message: 'Alioth AI Agent API is healthy',
+        version: '1.0.0',
+        timestamp: new Date().toISOString(),
+        capabilities: [
+          'yield-analysis',
+          'portfolio-optimization',
+          'risk-analysis',
+        ],
+      })
+    },
+  },
+
+  // Existing dashboard routes (keep for backward compatibility)
   {
     name: 'yield-dashboard',
     path: '/yield-dashboard',

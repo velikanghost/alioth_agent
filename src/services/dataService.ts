@@ -1,5 +1,7 @@
 import axios from 'axios'
 import { logger } from '@elizaos/core'
+import { aaveContractService } from './aaveContractService.js'
+import { compoundContractService } from './compoundContractService.js'
 
 export interface ProtocolData {
   name: string
@@ -33,6 +35,11 @@ export interface PoolData {
   volumeUsd1d?: number
   volumeUsd7d?: number
   poolId?: string // For historical data lookup
+  ltv?: number
+  liquidationThreshold?: number
+  canBeCollateral?: boolean
+  utilizationRate?: number
+  isActive?: boolean
 }
 
 export interface HistoricalDataPoint {
@@ -177,23 +184,14 @@ export class DeFiDataService {
         const response = await axios.get(`${this.yields_base}/pools`)
         const pools = response.data?.data || []
 
-        // Filter for major protocols and reasonable TVL
+        // Filter for testnet-supported protocols only (Aave and Compound-v3)
+        const supportedProtocols = ['aave', 'compound']
         const filteredPools = pools.filter((pool: any) => {
-          const majorProtocols = [
-            'aave',
-            'compound',
-            'curve',
-            'convex',
-            'lido',
-            'uniswap',
-            'rocket-pool',
-            'yearn',
-          ]
           const isValidPool =
             pool.tvlUsd > 1000000 && // Min $1M TVL
             pool.apy > 0 &&
             pool.apy < 500 && // Exclude unrealistic APYs
-            majorProtocols.some(
+            supportedProtocols.some(
               (protocol) =>
                 pool.project?.toLowerCase().includes(protocol) ||
                 pool.pool?.toLowerCase().includes(protocol),
@@ -447,10 +445,25 @@ export class DeFiDataService {
    * Get pools for a specific protocol
    */
   async getPoolsByProtocol(protocol: string): Promise<PoolData[]> {
-    const pools = await this.getYieldPools()
-    return pools.filter(
-      (pool) => pool.project.toLowerCase() === protocol.toLowerCase(),
-    )
+    try {
+      const protocolLower = protocol.toLowerCase()
+
+      // We only support Aave now - get data from contracts
+      if (protocolLower.includes('aave')) {
+        logger.info(`Fetching Aave pools from contracts...`)
+        const aaveReserves = await aaveContractService.getAllReserves()
+        return aaveContractService.convertToLegacyFormat(aaveReserves)
+      }
+
+      // For now, we don't support other protocols
+      logger.warn(
+        `Protocol ${protocol} not supported. Only Aave is currently supported.`,
+      )
+      return []
+    } catch (error) {
+      logger.error(`Error fetching pools for ${protocol}:`, error)
+      return []
+    }
   }
 
   /**
@@ -625,31 +638,43 @@ export class DeFiDataService {
     limit: number = 10,
     minTvl: number = 1_000_000,
   ): Promise<PoolData[]> {
-    const pools = await this.getYieldPools()
+    try {
+      logger.info('Fetching yield opportunities from Aave contracts only...')
 
-    // Filter and rank pools more intelligently
-    const validPools = pools
-      .filter((pool) => {
-        return (
-          pool.apy !== undefined &&
-          pool.apy > 1 && // Must have at least 1% APY to be meaningful
-          pool.tvlUsd > minTvl &&
-          pool.apy < 200 && // Filter out unrealistic APYs
-          pool.project && // Must have a project name
-          !pool.symbol.toLowerCase().includes('test') && // Filter out test pools
-          !pool.symbol.toLowerCase().includes('deprecated') // Filter out deprecated pools
-        )
-      })
-      .sort((a, b) => {
-        // Sort by risk-adjusted score (APY * sqrt(TVL))
-        const scoreA = (a.apy || 0) * Math.sqrt(a.tvlUsd / 1_000_000)
-        const scoreB = (b.apy || 0) * Math.sqrt(b.tvlUsd / 1_000_000)
-        return scoreB - scoreA
-      })
+      // Get Aave data from contracts - this is our only source now
+      const aaveReserves = await aaveContractService.getAllReserves()
+      const aaveData = aaveContractService.convertToLegacyFormat(aaveReserves)
 
-    logger.info(`Found ${validPools.length} valid yield opportunities`)
+      // Filter and rank pools intelligently
+      const validPools = aaveData
+        .filter((pool) => {
+          return (
+            pool.apy !== undefined &&
+            pool.apy > 0.1 && // Must have at least 0.1% APY to be meaningful
+            pool.tvlUsd > minTvl &&
+            pool.apy < 200 && // Filter out unrealistic APYs
+            pool.project && // Must have a project name
+            pool.symbol && // Must have a symbol
+            !pool.symbol.toLowerCase().includes('test') && // Filter out test pools
+            !pool.symbol.toLowerCase().includes('deprecated') // Filter out deprecated pools
+          )
+        })
+        .sort((a, b) => {
+          // Sort by risk-adjusted score (APY * sqrt(TVL))
+          const scoreA = (a.apy || 0) * Math.sqrt(a.tvlUsd / 1_000_000)
+          const scoreB = (b.apy || 0) * Math.sqrt(b.tvlUsd / 1_000_000)
+          return scoreB - scoreA
+        })
 
-    return validPools.slice(0, limit)
+      logger.info(
+        `Found ${validPools.length} valid yield opportunities from Aave contracts across ${aaveReserves.length} total reserves`,
+      )
+
+      return validPools.slice(0, limit)
+    } catch (error) {
+      logger.error('Error in getTopYieldOpportunities:', error)
+      return []
+    }
   }
 
   /**
@@ -662,19 +687,87 @@ export class DeFiDataService {
   }
 
   /**
-   * Get stablecoin yields (low IL risk)
+   * Get yields for a specific token - Aave contracts only
+   */
+  async getTokenYieldOpportunities(tokenSymbol: string): Promise<PoolData[]> {
+    try {
+      // Fetch from Aave contracts
+      const aavePromise =
+        tokenSymbol.toUpperCase() === 'USDC'
+          ? Promise.resolve([])
+          : aaveContractService.getTopYieldsForToken(tokenSymbol, 10)
+
+      // Fetch from Compound contracts (only returns data for USDC)
+      const compoundPromise = compoundContractService.getTopYieldsForToken(
+        tokenSymbol,
+        10,
+      )
+
+      const [aaveOpportunities, compoundOpportunities] = await Promise.all([
+        aavePromise,
+        compoundPromise,
+      ])
+
+      const aaveData =
+        aaveContractService.convertToLegacyFormat(aaveOpportunities)
+      const compoundData = compoundContractService.convertToLegacyFormat(
+        compoundOpportunities,
+      )
+
+      const combined = [...aaveData, ...compoundData]
+
+      // Filter and sort
+      const validOpportunities = combined
+        .filter((pool) => pool.apy && pool.apy > 0)
+        .sort((a, b) => (b.apy || 0) - (a.apy || 0))
+
+      logger.info(
+        `Found ${validOpportunities.length} yield opportunities for ${tokenSymbol} across protocols`,
+      )
+      return validOpportunities
+    } catch (error) {
+      logger.error(
+        `Error fetching yield opportunities for ${tokenSymbol}:`,
+        error,
+      )
+      return []
+    }
+  }
+
+  /**
+   * Get stablecoin yields (low IL risk) - Aave contracts only
    */
   async getStablecoinYields(): Promise<PoolData[]> {
-    const pools = await this.getYieldPools()
-    const stablecoinSymbols = ['USDC', 'USDT', 'DAI', 'FRAX', 'LUSD', 'sUSD']
+    try {
+      // Supported stablecoins
+      const stablecoinSymbols = ['USDC', 'GHO', 'EURS']
+      const pools: PoolData[] = []
 
-    return pools
-      .filter((pool) => {
-        // Check if the symbol contains stablecoin names
-        const symbol = pool.symbol.toUpperCase()
-        return stablecoinSymbols.some((stable) => symbol.includes(stable))
-      })
-      .sort((a, b) => (b.apy || 0) - (a.apy || 0))
+      for (const symbol of stablecoinSymbols) {
+        // Aave – skip USDC because it is not supply-enabled there
+        if (symbol !== 'USDC') {
+          const aaveReserves = await aaveContractService.getTopYieldsForToken(
+            symbol,
+            5,
+          )
+          pools.push(...aaveContractService.convertToLegacyFormat(aaveReserves))
+        }
+
+        // Compound (only USDC returns data)
+        const compoundReserves =
+          await compoundContractService.getTopYieldsForToken(symbol, 5)
+        pools.push(
+          ...compoundContractService.convertToLegacyFormat(compoundReserves),
+        )
+      }
+
+      return pools
+        .filter((pool) => pool.apy && pool.apy > 0)
+        .sort((a, b) => (b.apy || 0) - (a.apy || 0))
+    } catch (error) {
+      logger.error('Error fetching stablecoin yields:', error)
+      return []
+    }
   }
 
   /**

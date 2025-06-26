@@ -7,7 +7,6 @@ env
 *.env
 .env.local
 .eliza
-old_src
 docs
-src/prev.ts
 summary.txt
+deploy.txt
