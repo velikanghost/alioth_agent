@@ -5,7 +5,7 @@ import {
   type Project,
   type ProjectAgent,
 } from '@elizaos/core'
-import yieldOptimizerPlugin from './plugin.ts'
+import yieldOptimizerPlugin from './plugin.js'
 
 /**
  * Represents the default character (Eliza) with her specific attributes and behaviors.

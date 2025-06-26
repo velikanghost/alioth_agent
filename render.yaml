@@ -41,3 +41,7 @@ services:
         sync: false
       - key: PRIVY_APP_SECRET
         sync: false
+      - key: IGNORE_BOOTSTRAP
+        value: 'false'
+      - key: NODE_ENV
+        value: 'production'
