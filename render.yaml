@@ -6,7 +6,7 @@ services:
     buildCommand: |
       bun install --frozen-lockfile
       bun run build
-    startCommand: bun run start
+    startCommand: bun run start -- --character dist/index.js --port $PORT
     autoDeploy: true
     envVars:
       - key: SEPLOLIA_RPC_URL
@@ -41,7 +41,3 @@ services:
         sync: false
       - key: PRIVY_APP_SECRET
         sync: false
-      - key: IGNORE_BOOTSTRAP
-        value: 'false'
-      - key: NODE_ENV
-        value: 'production'
