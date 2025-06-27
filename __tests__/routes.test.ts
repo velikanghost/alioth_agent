@@ -1,79 +1,37 @@
-import { describe, expect, it, vi } from 'vitest';
-import plugin from '../src/plugin';
+import { describe, it, expect } from 'vitest'
+import plugin from '../src/plugin'
 
-describe('Plugin Routes', () => {
-  it('should have routes defined', () => {
-    expect(plugin.routes).toBeDefined();
-    if (plugin.routes) {
-      expect(Array.isArray(plugin.routes)).toBe(true);
-      expect(plugin.routes.length).toBeGreaterThan(0);
-    }
-  });
+// Get all route paths for quick helper
+const paths = plugin.routes?.map((r) => r.path) ?? []
 
-  it('should have a route for /helloworld', () => {
-    if (plugin.routes) {
-      const helloWorldRoute = plugin.routes.find((route) => route.path === '/helloworld');
-      expect(helloWorldRoute).toBeDefined();
+describe('Alioth Plugin Routes', () => {
+  it('should expose REST API endpoints', () => {
+    expect(plugin.routes).toBeDefined()
+    expect(Array.isArray(plugin.routes)).toBe(true)
+    expect(plugin.routes!.length).toBeGreaterThan(0)
+  })
 
-      if (helloWorldRoute) {
-        expect(helloWorldRoute.type).toBe('GET');
-        expect(typeof helloWorldRoute.handler).toBe('function');
-      }
-    }
-  });
+  it('should include primary v1 API paths', () => {
+    const expected = [
+      '/api/v1/yield-analysis',
+      '/api/v1/portfolio-optimization',
+      '/api/v1/risk-analysis',
+      '/api/v1/direct-deposit-optimization',
+    ]
+    expected.forEach((p) => expect(paths).toContain(p))
+  })
 
-  it('should handle route requests correctly', async () => {
-    if (plugin.routes) {
-      const helloWorldRoute = plugin.routes.find((route) => route.path === '/helloworld');
+  it('each route should have a valid structure', () => {
+    plugin.routes!.forEach((route) => {
+      expect(typeof route.path).toBe('string')
+      expect(route.path.startsWith('/')).toBe(true)
+      expect(['GET', 'POST', 'PUT', 'DELETE', 'PATCH']).toContain(route.type)
+      expect(typeof route.handler).toBe('function')
+    })
+  })
 
-      if (helloWorldRoute && helloWorldRoute.handler) {
-        // Create mock request and response objects
-        const mockReq = {};
-        const mockRes = {
-          json: vi.fn(),
-        };
-
-        // Mock runtime object as third parameter
-        const mockRuntime = {} as any;
-
-        // Call the route handler
-        await helloWorldRoute.handler(mockReq, mockRes, mockRuntime);
-
-        // Verify response
-        expect(mockRes.json).toHaveBeenCalledTimes(1);
-        expect(mockRes.json).toHaveBeenCalledWith({
-          message: 'Hello World!',
-        });
-      }
-    }
-  });
-
-  it('should validate route structure', () => {
-    if (plugin.routes) {
-      // Validate each route
-      plugin.routes.forEach((route) => {
-        expect(route).toHaveProperty('path');
-        expect(route).toHaveProperty('type');
-        expect(route).toHaveProperty('handler');
-
-        // Path should be a string starting with /
-        expect(typeof route.path).toBe('string');
-        expect(route.path.startsWith('/')).toBe(true);
-
-        // Type should be a valid HTTP method
-        expect(['GET', 'POST', 'PUT', 'DELETE', 'PATCH']).toContain(route.type);
-
-        // Handler should be a function
-        expect(typeof route.handler).toBe('function');
-      });
-    }
-  });
-
-  it('should have unique route paths', () => {
-    if (plugin.routes) {
-      const paths = plugin.routes.map((route) => route.path);
-      const uniquePaths = new Set(paths);
-      expect(paths.length).toBe(uniquePaths.size);
-    }
-  });
-});
+  it('paths should be unique', () => {
+    const unique = new Set(paths)
+    expect(unique.size).toBe(paths.length)
+  })
+})
