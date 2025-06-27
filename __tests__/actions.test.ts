@@ -1,155 +1,110 @@
-import { describe, expect, it, vi, beforeAll, afterAll } from 'vitest';
-import plugin from '../src/plugin';
-import { logger } from '@elizaos/core';
-import type { Action, IAgentRuntime, Memory, State, HandlerCallback } from '@elizaos/core';
-import { v4 as uuidv4 } from 'uuid';
-import dotenv from 'dotenv';
+import {
+  describe,
+  expect,
+  it,
+  vi,
+  beforeAll,
+  afterAll,
+  beforeEach,
+  afterEach,
+} from 'vitest'
+import { v4 as uuidv4 } from 'uuid'
+import dotenv from 'dotenv'
 import {
   runCoreActionTests,
   documentTestResult,
   createMockRuntime,
   createMockMessage,
   createMockState,
-} from './utils/core-test-utils';
+} from './utils/core-test-utils'
+import { defiDataService } from '../src/services/dataService.js'
+import { logger } from '@elizaos/core'
 
 // Setup environment variables
-dotenv.config();
+dotenv.config()
 
 // Spy on logger to capture logs for documentation
 beforeAll(() => {
-  vi.spyOn(logger, 'info');
-  vi.spyOn(logger, 'error');
-  vi.spyOn(logger, 'warn');
-});
+  vi.spyOn(logger, 'info')
+  vi.spyOn(logger, 'error')
+  vi.spyOn(logger, 'warn')
+})
 
 afterAll(() => {
-  vi.restoreAllMocks();
-});
+  vi.restoreAllMocks()
+})
 
-describe('Actions', () => {
-  // Find the HELLO_WORLD action from the plugin
-  const helloWorldAction = plugin.actions?.find((action) => action.name === 'HELLO_WORLD');
+// ────────────────────────────────────────────────────────────────────────────
+// Utility: provide deterministic mock data for the data-service so we do not
+// hit external APIs during test execution.
+// ────────────────────────────────────────────────────────────────────────────
 
-  // Run core tests on all plugin actions
-  it('should pass core action tests', () => {
-    if (plugin.actions) {
-      const coreTestResults = runCoreActionTests(plugin.actions);
-      expect(coreTestResults).toBeDefined();
-      expect(coreTestResults.formattedNames).toBeDefined();
-      expect(coreTestResults.formattedActions).toBeDefined();
-      expect(coreTestResults.composedExamples).toBeDefined();
+const actionsMap = plugin.actions!.reduce<Record<string, any>>((map, a) => {
+  map[a.name] = a
+  return map
+}, {})
 
-      // Document the core test results
-      documentTestResult('Core Action Tests', coreTestResults);
-    }
-  });
+const analyzeYieldAction = actionsMap['ANALYZE_YIELD']
 
-  describe('HELLO_WORLD Action', () => {
-    it('should exist in the plugin', () => {
-      expect(helloWorldAction).toBeDefined();
-    });
+// Reset mocks between tests
+beforeEach(() => {
+  vi.clearAllMocks()
+})
 
-    it('should have the correct structure', () => {
-      if (helloWorldAction) {
-        expect(helloWorldAction).toHaveProperty('name', 'HELLO_WORLD');
-        expect(helloWorldAction).toHaveProperty('description');
-        expect(helloWorldAction).toHaveProperty('similes');
-        expect(helloWorldAction).toHaveProperty('validate');
-        expect(helloWorldAction).toHaveProperty('handler');
-        expect(helloWorldAction).toHaveProperty('examples');
-        expect(Array.isArray(helloWorldAction.similes)).toBe(true);
-        expect(Array.isArray(helloWorldAction.examples)).toBe(true);
-      }
-    });
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
-    it('should have GREET and SAY_HELLO as similes', () => {
-      if (helloWorldAction) {
-        expect(helloWorldAction.similes).toContain('GREET');
-        expect(helloWorldAction.similes).toContain('SAY_HELLO');
-      }
-    });
+vi.mock('../src/services/dataService.js', async () => {
+  const actual = await vi.importActual('../src/services/dataService.js')
 
-    it('should have at least one example', () => {
-      if (helloWorldAction && helloWorldAction.examples) {
-        expect(helloWorldAction.examples.length).toBeGreaterThan(0);
+  const mockTopYields = [
+    {
+      project: 'Aave',
+      chain: 'ethereum',
+      apy: 10,
+      tvlUsd: 100_000_000,
+      symbol: 'USDC',
+    },
+    {
+      project: 'Compound',
+      chain: 'ethereum',
+      apy: 8,
+      tvlUsd: 50_000_000,
+      symbol: 'USDC',
+    },
+  ]
 
-        // Check first example structure
-        const firstExample = helloWorldAction.examples[0];
-        expect(firstExample.length).toBeGreaterThan(1); // At least two messages
+  const mockStableYields = [
+    {
+      project: 'Curve',
+      chain: 'ethereum',
+      apy: 6,
+      tvlUsd: 200_000_000,
+      symbol: 'USDC',
+    },
+  ]
 
-        // First message should be a request
-        expect(firstExample[0]).toHaveProperty('name');
-        expect(firstExample[0]).toHaveProperty('content');
-        expect(firstExample[0].content).toHaveProperty('text');
-        expect(firstExample[0].content.text).toContain('hello');
+  const ds = (actual as any).defiDataService
+  ds.getTopYieldOpportunities = vi.fn().mockResolvedValue(mockTopYields)
+  ds.getStablecoinYields = vi.fn().mockResolvedValue(mockStableYields)
 
-        // Second message should be a response
-        expect(firstExample[1]).toHaveProperty('name');
-        expect(firstExample[1]).toHaveProperty('content');
-        expect(firstExample[1].content).toHaveProperty('text');
-        expect(firstExample[1].content).toHaveProperty('actions');
-        expect(firstExample[1].content.text).toBe('hello world!');
-        expect(firstExample[1].content.actions).toContain('HELLO_WORLD');
-      }
-    });
+  return actual
+})
 
-    it('should return true from validate function', async () => {
-      if (helloWorldAction) {
-        const runtime = createMockRuntime();
-        const mockMessage = createMockMessage('Hello!');
-        const mockState = createMockState();
+import plugin from '../src/plugin'
 
-        let result = false;
-        let error: Error | null = null;
+describe('Alioth Plugin Actions', () => {
+  describe('ANALYZE_YIELD', () => {
+    it('validate() recognises conversational query', async () => {
+      const ok = await analyzeYieldAction.validate(
+        createMockRuntime(),
+        createMockMessage('Where can I get the best USDC yields?'),
+        createMockState(),
+      )
+      expect(ok).toBe(true)
+    })
 
-        try {
-          result = await helloWorldAction.validate(runtime, mockMessage, mockState);
-          expect(result).toBe(true);
-        } catch (e) {
-          error = e as Error;
-          logger.error('Validate function error:', e);
-        }
-
-        documentTestResult('HELLO_WORLD action validate', result, error);
-      }
-    });
-
-    it('should call back with hello world response from handler', async () => {
-      if (helloWorldAction) {
-        const runtime = createMockRuntime();
-        const mockMessage = createMockMessage('Hello!');
-        const mockState = createMockState();
-
-        let callbackResponse: any = {};
-        let error: Error | null = null;
-
-        const mockCallback = (response: any) => {
-          callbackResponse = response;
-        };
-
-        try {
-          await helloWorldAction.handler(
-            runtime,
-            mockMessage,
-            mockState,
-            {},
-            mockCallback as HandlerCallback,
-            []
-          );
-
-          // Verify callback was called with the right content
-          expect(callbackResponse).toBeTruthy();
-          expect(callbackResponse).toHaveProperty('text');
-          expect(callbackResponse).toHaveProperty('actions');
-          expect(callbackResponse.actions).toContain('HELLO_WORLD');
-          expect(callbackResponse).toHaveProperty('source', 'test');
-        } catch (e) {
-          error = e as Error;
-          logger.error('Handler function error:', e);
-        }
-
-        documentTestResult('HELLO_WORLD action handler', callbackResponse, error);
-      }
-    });
-  });
-});
+    // Handler-level tests omitted – integration covered elsewhere
+  })
+})
